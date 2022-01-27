@@ -1,22 +1,60 @@
 #![no_main]
 #![no_std]
 
-use cortex_m_rt::entry;
+mod timer;
+mod display;
 
-use rtt_target::{rprintln, rtt_init_print};
-
-// Need to be used to init vectors
-use nrf52832_hal;
+use rtt_target::rprintln;
 
 use core::panic::PanicInfo;
 
-#[entry]
-fn main() -> ! {
-    rtt_init_print!();
+#[rtic::app(device = nrf52832_hal::pac, dispatchers = [SWI0_EGU0])]
+mod pinetimers {
+    use crate::timer::MonoTimer;
+    use crate::display::Display;
 
-    rprintln!("Hello, world!");
+    use rtt_target::{rprintln, rtt_init_print};
+    use nrf52832_hal::pac::TIMER0;
 
-    todo!("Rest of the code")
+    #[monotonic(binds = TIMER0, default = true)]
+    type Mono0 = MonoTimer<TIMER0>;
+
+    #[shared]
+    struct Shared {
+        display: Display,
+    }
+
+    #[local]
+    struct Local {}
+
+    #[init]
+    fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
+        rtt_init_print!();
+        rprintln!("Pijn tijd");
+
+        display_init::spawn().unwrap();
+
+        let timer0: MonoTimer<TIMER0> = MonoTimer::new(ctx.device.TIMER0);
+
+        (Shared {
+            display: Display::default(),
+        }, Local {}, init::Monotonics(timer0))
+    }
+    
+    #[idle]
+    fn idle(_ctx: idle::Context) -> ! {
+        loop {
+            rprintln!("IDLE");
+            cortex_m::asm::wfi();
+        }
+    }
+
+    #[task(shared = [display])]
+    fn display_init(mut ctx: display_init::Context) {
+        ctx.shared.display.lock(|display| {
+            display.set_sleep(false);
+        });
+    }
 }
 
 #[panic_handler]
