@@ -17,6 +17,7 @@ mod pinetimers {
 
     use nrf52832_hal::pac::TIMER0;
     use nrf52832_hal::gpio::Level;
+    use nrf52832_hal::spim::{Frequency, MODE_3, Pins, Spim};
 
     use fugit::ExtU32;
 
@@ -26,6 +27,8 @@ mod pinetimers {
     #[shared]
     struct Shared {
         display: Display,
+        inverted: bool,
+        brightness: u8,
     }
 
     #[local]
@@ -42,14 +45,32 @@ mod pinetimers {
 
         let timer0: MonoTimer<TIMER0> = MonoTimer::new(ctx.device.TIMER0);
 
+        // Set up display
+        let display_pins = Pins {
+            sck: gpio.p0_02.into_push_pull_output(Level::Low).degrade(),
+            mosi: Some(gpio.p0_03.into_push_pull_output(Level::Low).degrade()),
+            miso: Some(gpio.p0_04.into_floating_input().degrade())
+        };
+        let display_spi = Spim::new(
+            ctx.device.SPIM1,
+            display_pins,
+            Frequency::M8,
+            MODE_3,
+            0
+        );
         let display = Display::new(
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
             gpio.p0_22.into_push_pull_output(Level::High).degrade(),
-            gpio.p0_23.into_push_pull_output(Level::High).degrade()
+            gpio.p0_23.into_push_pull_output(Level::High).degrade(),
+            gpio.p0_25.into_push_pull_output(Level::High).degrade(),
+            gpio.p0_18.into_push_pull_output(Level::High).degrade(),
+            display_spi,
         );
 
         (Shared {
-            display
+            display,
+            inverted: false,
+            brightness: 0
         }, Local {}, init::Monotonics(timer0))
     }
     
@@ -65,17 +86,20 @@ mod pinetimers {
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
             display.set_sleep(false);
-            display.set_brightness(0x0);
+            display.set_display_on(true);
+            display.set_brightness(0x8);
         });
-        increase_brightness::spawn_after(1_u32.secs()).unwrap();
+        toggle_invert::spawn_after(1_u32.secs()).unwrap();
     }
 
-    #[task(shared = [display])]
-    fn increase_brightness(mut ctx: increase_brightness::Context) {
-        ctx.shared.display.lock(|display| {
-            display.inc_brightness();
+    #[task(shared = [display, inverted, brightness])]
+    fn toggle_invert(ctx: toggle_invert::Context) {
+        (ctx.shared.display, ctx.shared.inverted, ctx.shared.brightness).lock(|display, inverted, brightness| {
+            display.set_brightness(*brightness);
+
+            *brightness = *brightness + 1;
         });
-        increase_brightness::spawn_after(1_u32.secs()).unwrap();
+        toggle_invert::spawn_after(1_u32.secs()).unwrap();
     }
 }
 
