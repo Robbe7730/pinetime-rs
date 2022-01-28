@@ -1,12 +1,12 @@
 #![no_main]
 #![no_std]
+#![feature(alloc_error_handler)]
 
 mod timer;
 mod display;
+mod allocator;
 
-use rtt_target::rprintln;
-
-use core::panic::PanicInfo;
+extern crate alloc;
 
 #[rtic::app(device = nrf52832_hal::pac, dispatchers = [SWI0_EGU0])]
 mod pinetimers {
@@ -15,9 +15,10 @@ mod pinetimers {
 
     use rtt_target::{rprintln, rtt_init_print};
 
-    use nrf52832_hal::pac::TIMER0;
+    use nrf52832_hal::pac::{TIMER0, SPIM1};
     use nrf52832_hal::gpio::Level;
     use nrf52832_hal::spim::{Frequency, MODE_3, Pins, Spim};
+    use nrf52832_hal::delay::Delay;
 
     use fugit::ExtU32;
 
@@ -26,9 +27,8 @@ mod pinetimers {
 
     #[shared]
     struct Shared {
-        display: Display,
-        inverted: bool,
-        brightness: u8,
+        display: Display<Spim<SPIM1>>,
+        i: u16,
     }
 
     #[local]
@@ -38,8 +38,6 @@ mod pinetimers {
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         rtt_init_print!();
         rprintln!("Pijn tijd");
-
-        display_init::spawn().unwrap();
 
         let gpio = nrf52832_hal::gpio::p0::Parts::new(ctx.device.P0);
 
@@ -65,12 +63,14 @@ mod pinetimers {
             gpio.p0_25.into_push_pull_output(Level::High).degrade(),
             gpio.p0_18.into_push_pull_output(Level::High).degrade(),
             display_spi,
+            Delay::new(ctx.core.SYST),
         );
+
+        display_init::spawn_after(1.secs()).unwrap();
 
         (Shared {
             display,
-            inverted: false,
-            brightness: 0
+            i: 0,
         }, Local {}, init::Monotonics(timer0))
     }
     
@@ -85,23 +85,33 @@ mod pinetimers {
     #[task(shared = [display])]
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
+            display.software_reset();
             display.set_sleep(false);
             display.set_display_on(true);
             display.set_brightness(0x8);
         });
-        toggle_invert::spawn_after(1_u32.secs()).unwrap();
+        do_something::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(shared = [display, inverted, brightness])]
-    fn toggle_invert(ctx: toggle_invert::Context) {
-        (ctx.shared.display, ctx.shared.inverted, ctx.shared.brightness).lock(|display, inverted, brightness| {
-            display.set_brightness(*brightness);
-
-            *brightness = *brightness + 1;
+    #[task(shared = [display, i])]
+    fn do_something(ctx: do_something::Context) {
+        (ctx.shared.display, ctx.shared.i).lock(|display, i| {
+            display.set_brightness((*i % 8) as u8);
+            *i += 1;
+            rprintln!("{}", i);
         });
-        toggle_invert::spawn_after(1_u32.secs()).unwrap();
+        do_something::spawn_after(1.secs()).unwrap();
     }
 }
+
+use rtt_target::rprintln;
+
+use core::panic::PanicInfo;
+use core::cell::UnsafeCell;
+
+use allocator::BumpPointerAlloc;
+
+use alloc::alloc::Layout;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -110,4 +120,16 @@ fn panic(info: &PanicInfo) -> ! {
     loop {
         cortex_m::asm::bkpt();
     }
+}
+
+#[global_allocator]
+static HEAP: BumpPointerAlloc = BumpPointerAlloc {
+    head: UnsafeCell::new(0x2000_1000),
+    end: 0x2001_0000,
+};
+
+
+#[alloc_error_handler]
+fn on_oom(_layout: Layout) -> ! {
+    panic!("Out of memory");
 }
