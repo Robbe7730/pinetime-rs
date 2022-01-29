@@ -15,10 +15,16 @@ mod pinetimers {
 
     use rtt_target::{rprintln, rtt_init_print};
 
-    use nrf52832_hal::pac::{TIMER0, SPIM1};
+    use nrf52832_hal::pac::TIMER0;
     use nrf52832_hal::gpio::Level;
     use nrf52832_hal::spim::{Frequency, MODE_3, Pins, Spim};
     use nrf52832_hal::delay::Delay;
+
+    use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
+    use embedded_graphics::prelude::{Size, Point};
+    use embedded_graphics::primitives::{Rectangle, PrimitiveStyleBuilder};
+    use embedded_graphics::prelude::Primitive;
+    use embedded_graphics::Drawable;
 
     use fugit::ExtU32;
 
@@ -27,7 +33,7 @@ mod pinetimers {
 
     #[shared]
     struct Shared {
-        display: Display<Spim<SPIM1>>,
+        display: Display<Rgb565>,
         i: u16,
     }
 
@@ -56,12 +62,21 @@ mod pinetimers {
             MODE_3,
             0
         );
-        let display = Display::new(
+        let display: Display<Rgb565> = Display::new(
+            // Backlight pins
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
             gpio.p0_22.into_push_pull_output(Level::High).degrade(),
             gpio.p0_23.into_push_pull_output(Level::High).degrade(),
+
+            // Command/Data pin
             gpio.p0_25.into_push_pull_output(Level::High).degrade(),
+
+            // Chip Select pin
             gpio.p0_18.into_push_pull_output(Level::High).degrade(),
+
+            // Reset pin
+            gpio.p0_26.into_push_pull_output(Level::High).degrade(),
+
             display_spi,
             Delay::new(ctx.core.SYST),
         );
@@ -85,10 +100,7 @@ mod pinetimers {
     #[task(shared = [display])]
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
-            display.software_reset();
-            display.set_sleep(false);
-            display.set_display_on(true);
-            display.set_brightness(0x8);
+            display.init();
         });
         do_something::spawn_after(1.secs()).unwrap();
     }
@@ -96,11 +108,20 @@ mod pinetimers {
     #[task(shared = [display, i])]
     fn do_something(ctx: do_something::Context) {
         (ctx.shared.display, ctx.shared.i).lock(|display, i| {
-            display.set_brightness((*i % 8) as u8);
+            rprintln!("{:?}", display.read_id());
+            rprintln!("{:?}", display.read_status());
+
+            let red_background = PrimitiveStyleBuilder::new()
+                .fill_color(Rgb565::RED)
+                .build();
+            Rectangle::new(Point::new(0, 0), Size::new(10, 10))
+                .into_styled(red_background)
+                .draw(display)
+                .unwrap();
             *i += 1;
             rprintln!("{}", i);
         });
-        do_something::spawn_after(1.secs()).unwrap();
+        // do_something::spawn_after(10.millis()).unwrap();
     }
 }
 
