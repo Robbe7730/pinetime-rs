@@ -1,5 +1,7 @@
 MEMORY
 {
+  /* Keep 32K for bootloader */
+  /* FLASH : ORIGIN = 0x00008000, LENGTH = 480K*/
   FLASH : ORIGIN = 0x00000000, LENGTH = 512K
   RAM : ORIGIN = 0x20000000, LENGTH = 64K
 }

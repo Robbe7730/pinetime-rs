@@ -21,9 +21,10 @@ mod pinetimers {
     use nrf52832_hal::delay::Delay;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
-    use embedded_graphics::prelude::{Size, Point};
-    use embedded_graphics::primitives::{Rectangle, PrimitiveStyleBuilder};
-    use embedded_graphics::prelude::Primitive;
+    use embedded_graphics::prelude::{Point};
+    use embedded_graphics::text::Text;
+    use embedded_graphics::mono_font::ascii::FONT_10X20;
+    use embedded_graphics::mono_font::MonoTextStyle;
     use embedded_graphics::Drawable;
 
     use fugit::ExtU32;
@@ -34,7 +35,6 @@ mod pinetimers {
     #[shared]
     struct Shared {
         display: Display<Rgb565>,
-        i: u16,
     }
 
     #[local]
@@ -49,19 +49,21 @@ mod pinetimers {
 
         let timer0: MonoTimer<TIMER0> = MonoTimer::new(ctx.device.TIMER0);
 
-        // Set up display
-        let display_pins = Pins {
+        // Set up SPI
+        let spi_pins = Pins {
             sck: gpio.p0_02.into_push_pull_output(Level::Low).degrade(),
             mosi: Some(gpio.p0_03.into_push_pull_output(Level::Low).degrade()),
             miso: Some(gpio.p0_04.into_floating_input().degrade())
         };
-        let display_spi = Spim::new(
-            ctx.device.SPIM1,
-            display_pins,
+        let spi = Spim::new(
+            ctx.device.SPIM0,
+            spi_pins,
             Frequency::M8,
             MODE_3,
             0
         );
+
+        // Set up display
         let display: Display<Rgb565> = Display::new(
             // Backlight pins
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
@@ -69,15 +71,15 @@ mod pinetimers {
             gpio.p0_23.into_push_pull_output(Level::High).degrade(),
 
             // Command/Data pin
-            gpio.p0_25.into_push_pull_output(Level::High).degrade(),
+            gpio.p0_18.into_push_pull_output(Level::Low).degrade(),
 
             // Chip Select pin
-            gpio.p0_18.into_push_pull_output(Level::High).degrade(),
+            gpio.p0_25.into_push_pull_output(Level::High).degrade(),
 
             // Reset pin
             gpio.p0_26.into_push_pull_output(Level::High).degrade(),
 
-            display_spi,
+            spi,
             Delay::new(ctx.core.SYST),
         );
 
@@ -85,7 +87,6 @@ mod pinetimers {
 
         (Shared {
             display,
-            i: 0,
         }, Local {}, init::Monotonics(timer0))
     }
     
@@ -105,23 +106,14 @@ mod pinetimers {
         do_something::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(shared = [display, i])]
-    fn do_something(ctx: do_something::Context) {
-        (ctx.shared.display, ctx.shared.i).lock(|display, i| {
-            rprintln!("{:?}", display.read_id());
-            rprintln!("{:?}", display.read_status());
-
-            let red_background = PrimitiveStyleBuilder::new()
-                .fill_color(Rgb565::RED)
-                .build();
-            Rectangle::new(Point::new(0, 0), Size::new(10, 10))
-                .into_styled(red_background)
+    #[task(shared = [display])]
+    fn do_something(mut ctx: do_something::Context) {
+        ctx.shared.display.lock(|display| {
+            let text_style = MonoTextStyle::new(&FONT_10X20, Rgb565::YELLOW);
+            Text::new("Yeet, skeet", Point::new(50, 50), text_style)
                 .draw(display)
                 .unwrap();
-            *i += 1;
-            rprintln!("{}", i);
         });
-        // do_something::spawn_after(10.millis()).unwrap();
     }
 }
 
