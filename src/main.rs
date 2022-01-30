@@ -15,9 +15,10 @@ mod pinetimers {
     use rtt_target::{rprintln, rtt_init_print};
 
     use nrf52832_hal::pac::TIMER0;
-    use nrf52832_hal::gpio::Level;
+    use nrf52832_hal::gpio::{Level, Pin, Input, Floating};
     use nrf52832_hal::spim::{Frequency, MODE_3, Pins, Spim};
     use nrf52832_hal::delay::Delay;
+    use nrf52832_hal::prelude::InputPin;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
     use embedded_graphics::prelude::{Point};
@@ -38,6 +39,7 @@ mod pinetimers {
     #[shared]
     struct Shared {
         display: Display<Rgb565>,
+        button: Pin<Input<Floating>>,
         counter: usize,
     }
 
@@ -59,6 +61,10 @@ mod pinetimers {
         let gpio = nrf52832_hal::gpio::p0::Parts::new(ctx.device.P0);
 
         let timer0: MonoTimer<TIMER0> = MonoTimer::new(ctx.device.TIMER0);
+
+        // Set up button
+        gpio.p0_15.into_push_pull_output(Level::High);
+        let button = gpio.p0_13.into_floating_input().degrade();
 
         // Set up SPI
         let spi_pins = Pins {
@@ -99,6 +105,7 @@ mod pinetimers {
         (Shared {
             display,
             counter: 0,
+            button,
         }, Local {}, init::Monotonics(timer0))
     }
     
@@ -120,14 +127,24 @@ mod pinetimers {
 
     }
 
-    #[task(shared = [display, counter])]
+    #[task(shared = [display, counter, button])]
     fn write_counter(ctx: write_counter::Context) {
         write_counter::spawn_after(1.secs()).unwrap();
 
-        (ctx.shared.display, ctx.shared.counter).lock(|display, counter| {
+        (ctx.shared.display, ctx.shared.counter, ctx.shared.button).lock(|display, counter, button| {
             let mut character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
             character_style.set_background_color(Some(Rgb565::WHITE));
             Text::with_baseline(&format!("{}", counter), Point::new(0, 0), character_style, Baseline::Top)
+                .draw(display)
+                .unwrap();
+
+            let pressed_text = if button.is_high().unwrap() {
+                "pressed    "
+            } else {
+                "not pressed"
+            };
+
+            Text::with_baseline(&format!("{}", pressed_text), Point::new(0, 20), character_style, Baseline::Top)
                 .draw(display)
                 .unwrap();
 
