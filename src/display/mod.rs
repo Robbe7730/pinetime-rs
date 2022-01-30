@@ -4,8 +4,6 @@
 // Reading Data does not work (RDDID: always (0, 0, 0), even if vec initialized to 1s)
 //   -> MISO pin is not connected to display...
 
-use rtt_target::rprintln;
-
 use nrf52832_hal::prelude::OutputPin;
 
 use nrf52832_hal::gpio::Pin;
@@ -28,6 +26,8 @@ use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::pixelcolor::raw::ToBytes;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::geometry::{OriginDimensions, Size, Dimensions};
+use embedded_graphics_core::primitives::Rectangle;
+use embedded_graphics_core::prelude::PointsIter;
 use embedded_graphics_core::Pixel;
 
 use core::convert::Infallible;
@@ -172,13 +172,18 @@ impl<
     fn send(&mut self, command: DisplayCommand) {
         self.pin_chip_select.set_low().unwrap();
 
+        self.send_no_cs(command);
+
+        self.pin_chip_select.set_high().unwrap();
+    }
+
+    // Send without changing Chip Select, useful for StartRamWrite
+    fn send_no_cs(&mut self, command: DisplayCommand) {
         let parts: Vec<TransmissionByte> = command.into();
 
         parts.iter().for_each(|b| {
             self.transmit_byte(b)
         });
-
-        self.pin_chip_select.set_high().unwrap();
     }
     
     fn transmit_byte(&mut self, b: &TransmissionByte) {
@@ -362,6 +367,36 @@ impl DrawTarget for Display<Rgb565> {
                 self.send(DisplayCommand::RamWrite(color.to_be_bytes().to_vec()));
             }
         });
+
+        Ok(())
+    }
+
+    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        let drawable_area = area.intersection(&self.bounding_box());
+        self.select_area(
+            drawable_area.rows().start.try_into().unwrap(),
+            drawable_area.columns().start.try_into().unwrap(),
+            u16::try_from(drawable_area.rows().end).unwrap() - 1,
+            u16::try_from(drawable_area.columns().end).unwrap() - 1,
+        );
+
+        self.pin_chip_select.set_low().unwrap();
+
+        self.send_no_cs(DisplayCommand::StartRamWrite);
+        area.points()
+            .zip(colors)
+            .for_each(|(p, c)| {
+                if self.bounding_box().contains(p) {
+                    let bytes = c.to_be_bytes();
+                    self.transmit_byte(&TransmissionByte::Data(bytes[0]));
+                    self.transmit_byte(&TransmissionByte::Data(bytes[1]));
+                }
+            });
+
+        self.pin_chip_select.set_high().unwrap();
 
         Ok(())
     }

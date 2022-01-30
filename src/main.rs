@@ -20,14 +20,17 @@ mod pinetimers {
     use nrf52832_hal::delay::Delay;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
-    use embedded_graphics::prelude::{Point, Size, Primitive};
+    use embedded_graphics::prelude::{Point};
     use embedded_graphics::text::{Text, Baseline};
+    use embedded_graphics::text::renderer::CharacterStyle;
     use embedded_graphics::mono_font::ascii::FONT_10X20;
     use embedded_graphics::mono_font::MonoTextStyle;
-    use embedded_graphics::primitives::{PrimitiveStyleBuilder, Rectangle};
+    use embedded_graphics::draw_target::DrawTarget;
     use embedded_graphics::Drawable;
 
     use fugit::ExtU32;
+
+    use alloc::format;
 
     #[monotonic(binds = TIMER0, default = true)]
     type Mono0 = MonoTimer<TIMER0>;
@@ -35,6 +38,7 @@ mod pinetimers {
     #[shared]
     struct Shared {
         display: Display<Rgb565>,
+        counter: usize,
     }
 
     #[local]
@@ -94,6 +98,7 @@ mod pinetimers {
 
         (Shared {
             display,
+            counter: 0,
         }, Local {}, init::Monotonics(timer0))
     }
     
@@ -109,25 +114,24 @@ mod pinetimers {
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
             display.init();
+            display.clear(Rgb565::WHITE).unwrap();
         });
-        do_something::spawn_after(1.secs()).unwrap();
+        write_counter::spawn().unwrap();
+
     }
 
-    #[task(shared = [display])]
-    fn do_something(mut ctx: do_something::Context) {
-        ctx.shared.display.lock(|display| {
-            let rect_style = PrimitiveStyleBuilder::new()
-                .fill_color(Rgb565::WHITE)
-                .build();
-            Rectangle::new(Point::new(0, 0), Size::new(240, 240))
-                .into_styled(rect_style)
+    #[task(shared = [display, counter])]
+    fn write_counter(ctx: write_counter::Context) {
+        write_counter::spawn_after(1.secs()).unwrap();
+
+        (ctx.shared.display, ctx.shared.counter).lock(|display, counter| {
+            let mut character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
+            character_style.set_background_color(Some(Rgb565::WHITE));
+            Text::with_baseline(&format!("{}", counter), Point::new(0, 0), character_style, Baseline::Top)
                 .draw(display)
                 .unwrap();
 
-            let character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
-            Text::with_baseline("Pijn tijd", Point::new(0, 0), character_style, Baseline::Top)
-                .draw(display)
-                .unwrap();
+            *counter += 1;
         });
     }
 }
