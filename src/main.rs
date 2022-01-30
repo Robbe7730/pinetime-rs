@@ -4,7 +4,6 @@
 
 mod timer;
 mod display;
-mod allocator;
 
 extern crate alloc;
 
@@ -21,10 +20,11 @@ mod pinetimers {
     use nrf52832_hal::delay::Delay;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
-    use embedded_graphics::prelude::{Point};
-    use embedded_graphics::text::Text;
+    use embedded_graphics::prelude::{Point, Size, Primitive};
+    use embedded_graphics::text::{Text, Baseline};
     use embedded_graphics::mono_font::ascii::FONT_10X20;
     use embedded_graphics::mono_font::MonoTextStyle;
+    use embedded_graphics::primitives::{PrimitiveStyleBuilder, Rectangle};
     use embedded_graphics::Drawable;
 
     use fugit::ExtU32;
@@ -44,6 +44,13 @@ mod pinetimers {
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         rtt_init_print!();
         rprintln!("Pijn tijd");
+
+        // Set up heap
+        unsafe {
+            let heap_start = 0x2000_1000;
+            let heap_end = 0x2001_0000;
+            crate::HEAP.lock().init(heap_start, heap_end - heap_start);
+        }
 
         let gpio = nrf52832_hal::gpio::p0::Parts::new(ctx.device.P0);
 
@@ -109,8 +116,16 @@ mod pinetimers {
     #[task(shared = [display])]
     fn do_something(mut ctx: do_something::Context) {
         ctx.shared.display.lock(|display| {
-            let text_style = MonoTextStyle::new(&FONT_10X20, Rgb565::YELLOW);
-            Text::new("Yeet, skeet", Point::new(50, 50), text_style)
+            let rect_style = PrimitiveStyleBuilder::new()
+                .fill_color(Rgb565::WHITE)
+                .build();
+            Rectangle::new(Point::new(0, 0), Size::new(240, 240))
+                .into_styled(rect_style)
+                .draw(display)
+                .unwrap();
+
+            let character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
+            Text::with_baseline("Pijn tijd", Point::new(0, 0), character_style, Baseline::Top)
                 .draw(display)
                 .unwrap();
         });
@@ -120,9 +135,8 @@ mod pinetimers {
 use rtt_target::rprintln;
 
 use core::panic::PanicInfo;
-use core::cell::UnsafeCell;
 
-use allocator::BumpPointerAlloc;
+use linked_list_allocator::LockedHeap;
 
 use alloc::alloc::Layout;
 
@@ -136,11 +150,7 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 #[global_allocator]
-static HEAP: BumpPointerAlloc = BumpPointerAlloc {
-    head: UnsafeCell::new(0x2000_1000),
-    end: 0x2001_0000,
-};
-
+static HEAP: LockedHeap = LockedHeap::empty();
 
 #[alloc_error_handler]
 fn on_oom(_layout: Layout) -> ! {

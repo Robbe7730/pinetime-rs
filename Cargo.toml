@@ -14,3 +14,4 @@ rtt-target = { version = "0.3.1", features = ["cortex-m"] }
 fugit = "0.3.3"
 embedded-graphics-core = "0.3.3"
 embedded-graphics = "0.7.1"
+linked_list_allocator = "0.9.1"

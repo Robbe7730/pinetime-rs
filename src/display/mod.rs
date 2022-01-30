@@ -4,6 +4,8 @@
 // Reading Data does not work (RDDID: always (0, 0, 0), even if vec initialized to 1s)
 //   -> MISO pin is not connected to display...
 
+use rtt_target::rprintln;
+
 use nrf52832_hal::prelude::OutputPin;
 
 use nrf52832_hal::gpio::Pin;
@@ -25,7 +27,7 @@ use alloc::vec;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::pixelcolor::raw::ToBytes;
 use embedded_graphics_core::draw_target::DrawTarget;
-use embedded_graphics_core::geometry::{OriginDimensions, Size};
+use embedded_graphics_core::geometry::{OriginDimensions, Size, Dimensions};
 use embedded_graphics_core::Pixel;
 
 use core::convert::Infallible;
@@ -350,9 +352,15 @@ impl DrawTarget for Display<Rgb565> {
     where
         I: IntoIterator<Item = Pixel<Self::Color>> {
         pixels.into_iter().for_each(|p| {
-            let (col, row, color) = (p.0.x.try_into().unwrap(), p.0.y.try_into().unwrap(), p.1);
-            self.select_area(row, col, row+1, col+1);
-            self.send(DisplayCommand::RamWrite(color.to_be_bytes().to_vec()));
+            if self.bounding_box().contains(p.0) {
+                let (col, row, color) = (
+                    p.0.x.try_into().unwrap(),
+                    p.0.y.try_into().unwrap(),
+                    p.1
+                );
+                self.select_area(row, col, row+1, col+1);
+                self.send(DisplayCommand::RamWrite(color.to_be_bytes().to_vec()));
+            }
         });
 
         Ok(())
