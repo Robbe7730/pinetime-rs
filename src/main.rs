@@ -13,7 +13,7 @@ mod pinetimers {
     use crate::drivers::display::Display;
     use crate::drivers::touchpanel::TouchPanel;
 
-    use crate::ui::screen::{Screen, ScreenDummy1};
+    use crate::ui::screen::{Screen, ScreenMain};
 
     use rtt_target::{rprintln, rtt_init_print};
 
@@ -26,8 +26,6 @@ mod pinetimers {
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
     use embedded_graphics_core::draw_target::DrawTarget;
-
-    use fugit::ExtU32;
 
     use alloc::boxed::Box;
 
@@ -134,7 +132,7 @@ mod pinetimers {
         );
 
         // Set up the UI
-        let screen: Box<dyn Screen<COLOR>> = Box::new(ScreenDummy1::new());
+        let screen: Box<dyn Screen<COLOR>> = Box::new(ScreenMain::new());
 
         display_init::spawn().unwrap();
 
