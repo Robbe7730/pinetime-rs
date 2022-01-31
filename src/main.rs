@@ -2,17 +2,15 @@
 #![no_std]
 #![feature(alloc_error_handler)]
 
-mod timer;
-mod display;
-mod touchpanel;
+mod drivers;
 
 extern crate alloc;
 
 #[rtic::app(device = nrf52832_hal::pac, dispatchers = [SWI0_EGU0])]
 mod pinetimers {
-    use crate::timer::MonoTimer;
-    use crate::display::Display;
-    use crate::touchpanel::{TouchPanel, TouchPanelEventHandler, TouchPoint};
+    use crate::drivers::timer::MonoTimer;
+    use crate::drivers::display::Display;
+    use crate::drivers::touchpanel::{TouchPanel, TouchPanelEventHandler, TouchPoint};
 
     use rtt_target::{rprintln, rtt_init_print};
 

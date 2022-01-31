@@ -1,7 +1,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::display::TransmissionByte;
+use crate::drivers::display::TransmissionByte;
 
 #[derive(Debug)]
 #[repr(u8)]

@@ -7,8 +7,8 @@ use embedded_graphics_core::Pixel;
 
 use nrf52832_hal::prelude::OutputPin;
 
-use crate::display::{Display, DisplaySupported};
-use crate::display::commands::DisplayCommand;
+use crate::drivers::display::{Display, DisplaySupported};
+use crate::drivers::display::commands::DisplayCommand;
 
 use core::convert::Infallible;
 
