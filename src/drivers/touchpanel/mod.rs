@@ -1,12 +1,10 @@
 use nrf52832_hal::twim::Twim;
 use nrf52832_hal::pac::TWIM1;
 
-pub struct TouchPanel<HANDLER>
-where
-    HANDLER: TouchPanelEventHandler,
-{
+use alloc::sync::Arc;
+
+pub struct TouchPanel {
     twim: Twim<TWIM1>,
-    event_handler: Option<HANDLER>,
 }
 
 #[derive(Debug)]
@@ -84,15 +82,14 @@ pub trait TouchPanelEventHandler {
     fn on_event(&self, _point: TouchPoint) {}
 }
 
-impl<HANDLER : TouchPanelEventHandler> TouchPanel<HANDLER> {
-    pub fn new(twim: Twim<TWIM1>, event_handler: Option<HANDLER>) -> Self {
+impl TouchPanel {
+    pub fn new(twim: Twim<TWIM1>) -> Self {
         TouchPanel {
             twim,
-            event_handler
         }
     }
 
-    pub fn handle_interrupt(&mut self) {
+    pub fn handle_interrupt(&mut self, event_handler: Option<Arc<dyn TouchPanelEventHandler>>) {
         let mut buffer = [0; 63];
         self.twim.read(0x15, &mut buffer).unwrap();
 
@@ -105,7 +102,7 @@ impl<HANDLER : TouchPanelEventHandler> TouchPanel<HANDLER> {
             y: (((buffer[5] & 0xf) as u16) << 8) | buffer[6] as u16,
         };
 
-        if let Some(handler) = &self.event_handler {
+        if let Some(handler) = event_handler {
             match gesture {
                 GestureType::SlideDown => handler.on_slide_down(touchpoint),
                 GestureType::SlideUp => handler.on_slide_up(touchpoint),

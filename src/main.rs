@@ -3,6 +3,7 @@
 #![feature(alloc_error_handler)]
 
 mod drivers;
+mod ui;
 
 extern crate alloc;
 
@@ -10,7 +11,9 @@ extern crate alloc;
 mod pinetimers {
     use crate::drivers::timer::MonoTimer;
     use crate::drivers::display::Display;
-    use crate::drivers::touchpanel::{TouchPanel, TouchPanelEventHandler, TouchPoint};
+    use crate::drivers::touchpanel::TouchPanel;
+
+    use crate::ui::screen::{Screen, ScreenDummy1};
 
     use rtt_target::{rprintln, rtt_init_print};
 
@@ -22,16 +25,11 @@ mod pinetimers {
     use nrf52832_hal::delay::Delay;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
-    use embedded_graphics::prelude::{Point, Size};
-    use embedded_graphics::primitives::{Primitive, PrimitiveStyle, Rectangle};
-    use embedded_graphics::text::{Text, Baseline};
-    use embedded_graphics::text::renderer::CharacterStyle;
-    use embedded_graphics::mono_font::MonoTextStyle;
-    use embedded_graphics::mono_font::ascii::FONT_10X20;
-    use embedded_graphics::draw_target::DrawTarget;
-    use embedded_graphics::Drawable;
+    use embedded_graphics_core::draw_target::DrawTarget;
 
-    use alloc::format;
+    use fugit::ExtU32;
+
+    use alloc::boxed::Box;
 
     #[monotonic(binds = TIMER0, default = true)]
     type Mono0 = MonoTimer<TIMER0>;
@@ -42,35 +40,15 @@ mod pinetimers {
     struct Shared {
         display: Display<COLOR>,
         gpiote: Gpiote,
-        touchpanel: TouchPanel<MainTouchPanelHandler>,
+        touchpanel: TouchPanel,
+
+        current_screen: Box<dyn Screen<COLOR>>,
+
         counter: usize,
     }
 
     #[local]
     struct Local {}
-
-    pub struct MainTouchPanelHandler {}
-    impl TouchPanelEventHandler for MainTouchPanelHandler {
-        fn on_click(&self, touchpoint: TouchPoint) {
-            draw_rectangle::spawn(
-                touchpoint.x.into(),
-                touchpoint.y.into(),
-                10,
-                10,
-                COLOR::BLACK
-            ).unwrap();
-        }
-
-        fn on_slide(&self, touchpoint: TouchPoint) {
-            draw_rectangle::spawn(
-                touchpoint.x.into(),
-                touchpoint.y.into(),
-                10,
-                10,
-                COLOR::BLACK
-            ).unwrap();
-        }
-    }
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -133,7 +111,7 @@ mod pinetimers {
             .input_pin(&tp_int_pin)
             .lo_to_hi()
             .enable_interrupt();
-        let touchpanel = TouchPanel::new(twim, Some(MainTouchPanelHandler{}));
+        let touchpanel = TouchPanel::new(twim);
 
         // Set up display
         let display: Display<COLOR> = Display::new(
@@ -155,12 +133,17 @@ mod pinetimers {
             Delay::new(ctx.core.SYST),
         );
 
+        // Set up the UI
+        let screen: Box<dyn Screen<COLOR>> = Box::new(ScreenDummy1::new());
+
         display_init::spawn().unwrap();
 
         (Shared {
             display,
             gpiote,
             touchpanel,
+
+            current_screen: screen,
 
             counter: 0,
         }, Local {}, init::Monotonics(timer0))
@@ -180,49 +163,40 @@ mod pinetimers {
             display.init();
             display.clear(COLOR::WHITE).unwrap();
         });
-        write_counter::spawn().unwrap();
+        draw_screen::spawn().unwrap();
     }
 
-    #[task(shared = [display, counter])]
-    fn write_counter(ctx: write_counter::Context) {
-        (ctx.shared.display, ctx.shared.counter).lock(|display, counter| {
-            let mut character_style = MonoTextStyle::new(&FONT_10X20, COLOR::BLACK);
-            character_style.set_background_color(Some(COLOR::WHITE));
-            Text::with_baseline(&format!("{}", counter), Point::new(0, 0), character_style, Baseline::Top)
-                .draw(display)
-                .unwrap();
-        });
-    }
-
-    #[task(binds = GPIOTE, shared = [gpiote, counter, touchpanel])]
+    #[task(binds = GPIOTE, shared = [gpiote, counter, touchpanel, current_screen])]
     fn gpiote_interrupt(ctx: gpiote_interrupt::Context) {
-        (ctx.shared.gpiote, ctx.shared.counter, ctx.shared.touchpanel).lock(|gpiote, counter, touchpanel| {
+        (
+            ctx.shared.gpiote,
+            ctx.shared.counter,
+            ctx.shared.touchpanel,
+            ctx.shared.current_screen
+        ).lock(|gpiote, counter, touchpanel, current_screen| {
             if gpiote.channel0().is_event_triggered() {
                 *counter += 1;
             } else if gpiote.channel1().is_event_triggered() {
-                touchpanel.handle_interrupt();
+                touchpanel.handle_interrupt(Some(current_screen.get_event_handler()));
             } else {
                 panic!("Unknown channel triggered");
             }
             gpiote.reset_events()
         });
-        write_counter::spawn().unwrap();
+        draw_screen::spawn().unwrap();
     }
 
-    #[task(shared = [display])]
-    fn draw_rectangle(
-        mut ctx: draw_rectangle::Context,
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        color: COLOR
-    ) {
-        ctx.shared.display.lock(|display| {
-            Rectangle::new(Point::new(x, y), Size::new(width, height))
-                .into_styled(PrimitiveStyle::with_fill(color))
-                .draw(display)
-                .unwrap();
+    #[task(shared = [display, current_screen])]
+    fn draw_screen(ctx: draw_screen::Context) {
+        (ctx.shared.display, ctx.shared.current_screen).lock(|display, current_screen| {
+            current_screen.draw(display);
+        });
+    }
+
+    #[task(shared = [current_screen])]
+    fn transition(mut ctx: transition::Context, new_screen: Box<dyn Screen<COLOR>>) {
+        (ctx.shared.current_screen).lock(|current_screen| {
+            *current_screen = new_screen;
         });
     }
 }
