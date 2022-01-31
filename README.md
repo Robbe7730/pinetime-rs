@@ -8,7 +8,6 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
     - [x] Hardware tasks
     - [x] Software tasks
     - [x] GPIOTE tasks
-        - [x] Channel 0: push button
 - [x] ST7789 display
     - [x] Driver
     - [x] [embedded_graphics](https://github.com/embedded-graphics/embedded-graphics) interface
@@ -29,6 +28,7 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
 
 1. Push button
 2. Touch panel
+3. Charging state
 
 ### SPI/TWI channels
 

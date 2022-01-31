@@ -1,6 +1,7 @@
 use crate::ui::screen::{Screen, ScreenMain};
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::{Display, DisplaySupported};
+use crate::devicestate::DeviceState;
 
 use embedded_graphics::pixelcolor::{RgbColor, PixelColor};
 use embedded_graphics::prelude::{Drawable, Point};
@@ -46,7 +47,7 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw(&self, display: &mut Display<COLOR>) {
+    fn draw(&self, display: &mut Display<COLOR>, _devicestate: &DeviceState) {
         let bmp_data = include_bytes!("../../../poes565.bmp");
         let image = Bmp::<COLOR>::from_slice(bmp_data).unwrap();
         Image::new(&image, Point::new(0,0))

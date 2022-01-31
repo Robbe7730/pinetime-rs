@@ -413,6 +413,7 @@ dependencies = [
  "cortex-m-rtic",
  "embedded-graphics",
  "embedded-graphics-core",
+ "embedded-hal",
  "fugit",
  "linked_list_allocator",
  "nrf52832-hal",
