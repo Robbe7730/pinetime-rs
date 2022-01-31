@@ -38,9 +38,11 @@ mod pinetimers {
     #[monotonic(binds = TIMER0, default = true)]
     type Mono0 = MonoTimer<TIMER0>;
 
+    type COLOR = Rgb565;
+
     #[shared]
     struct Shared {
-        display: Display<Rgb565>,
+        display: Display<COLOR>,
         gpiote: Gpiote,
         touchpanel: TouchPanel<MainTouchPanelHandler>,
         counter: usize,
@@ -52,11 +54,23 @@ mod pinetimers {
     pub struct MainTouchPanelHandler {}
     impl TouchPanelEventHandler for MainTouchPanelHandler {
         fn on_click(&self, touchpoint: TouchPoint) {
-            draw_rectangle::spawn(touchpoint.x.into(), touchpoint.y.into(), 10, 10, Rgb565::RED);
+            draw_rectangle::spawn(
+                touchpoint.x.into(),
+                touchpoint.y.into(),
+                10,
+                10,
+                COLOR::BLACK
+            ).unwrap();
         }
 
         fn on_slide(&self, touchpoint: TouchPoint) {
-            draw_rectangle::spawn(touchpoint.x.into(), touchpoint.y.into(), 10, 10, Rgb565::GREEN);
+            draw_rectangle::spawn(
+                touchpoint.x.into(),
+                touchpoint.y.into(),
+                10,
+                10,
+                COLOR::BLACK
+            ).unwrap();
         }
     }
 
@@ -124,7 +138,7 @@ mod pinetimers {
         let touchpanel = TouchPanel::new(twim, Some(MainTouchPanelHandler{}));
 
         // Set up display
-        let display: Display<Rgb565> = Display::new(
+        let display: Display<COLOR> = Display::new(
             // Backlight pins
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
             gpio.p0_22.into_push_pull_output(Level::High).degrade(),
@@ -166,7 +180,7 @@ mod pinetimers {
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
             display.init();
-            display.clear(Rgb565::WHITE).unwrap();
+            display.clear(COLOR::WHITE).unwrap();
         });
         write_counter::spawn().unwrap();
     }
@@ -174,8 +188,8 @@ mod pinetimers {
     #[task(shared = [display, counter])]
     fn write_counter(ctx: write_counter::Context) {
         (ctx.shared.display, ctx.shared.counter).lock(|display, counter| {
-            let mut character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
-            character_style.set_background_color(Some(Rgb565::WHITE));
+            let mut character_style = MonoTextStyle::new(&FONT_10X20, COLOR::BLACK);
+            character_style.set_background_color(Some(COLOR::WHITE));
             Text::with_baseline(&format!("{}", counter), Point::new(0, 0), character_style, Baseline::Top)
                 .draw(display)
                 .unwrap();
@@ -198,7 +212,14 @@ mod pinetimers {
     }
 
     #[task(shared = [display])]
-    fn draw_rectangle(mut ctx: draw_rectangle::Context, x: i32, y: i32, width: u32, height: u32, color: Rgb565) {
+    fn draw_rectangle(
+        mut ctx: draw_rectangle::Context,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        color: COLOR
+    ) {
         ctx.shared.display.lock(|display| {
             Rectangle::new(Point::new(x, y), Size::new(width, height))
                 .into_styled(PrimitiveStyle::with_fill(color))

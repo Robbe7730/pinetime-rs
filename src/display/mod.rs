@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 
 use commands::{DisplayCommand, RGBPixelFormat, ControlPixelFormat};
 
-use embedded_graphics_core::pixelcolor::{Rgb565, Rgb666, RgbColor};
+use embedded_graphics_core::pixelcolor::{Gray2, GrayColor, Rgb565, Rgb666, RgbColor};
 
 mod commands;
 mod graphics;
@@ -253,5 +253,30 @@ impl DisplaySupported<Rgb666> for Display<Rgb666> {
         self.transmit_byte(&TransmissionByte::Data(pixel.r() << 2));
         self.transmit_byte(&TransmissionByte::Data(pixel.g() << 2));
         self.transmit_byte(&TransmissionByte::Data(pixel.b() << 2));
+    }
+}
+
+impl DisplaySupported<Gray2> for Display<Gray2> {
+    fn set_pixel_config(&mut self) {
+        self.set_interface_pixel_format(
+            RGBPixelFormat::Format262K,
+            ControlPixelFormat::Format18bpp
+        );
+
+        self.set_memory_data_access_control(0b00000000);
+    }
+
+    // using 666
+    fn transmit_color(&mut self, pixel: Gray2) {
+        let byte = match pixel.luma() {
+            0b00 => 0x00,
+            0b01 => 0x0f,
+            0b10 => 0xf0,
+            0b11 => 0xff,
+            x => panic!("Invalid luma {}", x),
+        };
+        self.transmit_byte(&TransmissionByte::Data(byte << 2));
+        self.transmit_byte(&TransmissionByte::Data(byte << 2));
+        self.transmit_byte(&TransmissionByte::Data(byte << 2));
     }
 }

@@ -6,17 +6,18 @@ use crate::display::TransmissionByte;
 #[derive(Debug)]
 #[repr(u8)]
 pub enum RGBPixelFormat {
-    Format65K = 0b101,      // 65K RGB Interface
-    Format262K = 0b110,     // 262K RGB Interface
+    Format4K = 0b011,       // 4K RGB Interface (used in RGB444)
+    Format65K = 0b101,      // 65K RGB Interface (used in RGB565)
+    Format262K = 0b110,     // 262K RGB Interface (used in RGB666)
 }
 
 #[derive(Debug)]
 #[repr(u8)]
 pub enum ControlPixelFormat {
-    Format12bpp = 0b011,
-    Format16bpp = 0b101,
-    Format18bpp = 0b110,
-    Format16MTruncated = 0b111,
+    Format12bpp = 0b011,        // Used in RGB444
+    Format16bpp = 0b101,        // Used in RGB565
+    Format18bpp = 0b110,        // Used in RGB666
+    Format16MTruncated = 0b111, // Unused?
 }
 
 #[allow(dead_code)] // Not all commands are used, but should be implemented
