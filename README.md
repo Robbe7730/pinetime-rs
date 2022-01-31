@@ -12,8 +12,25 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
 - [x] ST7789 display
     - [x] Driver
     - [x] [embedded_graphics](https://github.com/embedded-graphics/embedded-graphics) interface
-- [ ] CST816S Touch controller
-- [ ] HRS3300 Heartrate Sensor
-- [ ] BMA423 Accelerometer + Step Counter
+- [x] CST816S Touch controller
+- [ ] Real-Time Clock
 - [ ] Bluetooth
 - [ ] MCUBoot/InfiniTime bootloader support
+- [ ] HRS3300 Heartrate Sensor
+- [ ] BMA423 Accelerometer
+    - [ ] Step Counter
+    - [ ] Activity Recognition: Running, Walking, Still
+    - [ ] Tilt-On-Wrist detection
+    - [ ] Tap/Double tap interrupt (for disabled touch panel?) 
+
+## Allocations
+
+### GPIOTE Interrupts
+
+1. Push button
+2. Touch panel
+
+### SPI/TWI channels
+
+0. SPIM
+1. TWIM

@@ -4,6 +4,7 @@
 
 mod timer;
 mod display;
+mod touchpanel;
 
 extern crate alloc;
 
@@ -11,25 +12,26 @@ extern crate alloc;
 mod pinetimers {
     use crate::timer::MonoTimer;
     use crate::display::Display;
+    use crate::touchpanel::{TouchPanel, TouchPanelEventHandler, TouchPoint};
 
     use rtt_target::{rprintln, rtt_init_print};
 
     use nrf52832_hal::pac::TIMER0;
     use nrf52832_hal::gpio::Level;
     use nrf52832_hal::gpiote::Gpiote;
-    use nrf52832_hal::spim::{Frequency, MODE_3, Pins, Spim};
+    use nrf52832_hal::spim::{self, MODE_3, Spim};
+    use nrf52832_hal::twim::{self, Twim};
     use nrf52832_hal::delay::Delay;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
-    use embedded_graphics::prelude::{Point};
+    use embedded_graphics::prelude::{Point, Size};
+    use embedded_graphics::primitives::{Primitive, PrimitiveStyle, Rectangle};
     use embedded_graphics::text::{Text, Baseline};
     use embedded_graphics::text::renderer::CharacterStyle;
     use embedded_graphics::mono_font::MonoTextStyle;
     use embedded_graphics::mono_font::ascii::FONT_10X20;
     use embedded_graphics::draw_target::DrawTarget;
     use embedded_graphics::Drawable;
-
-    use fugit::ExtU32;
 
     use alloc::format;
 
@@ -40,11 +42,23 @@ mod pinetimers {
     struct Shared {
         display: Display<Rgb565>,
         gpiote: Gpiote,
+        touchpanel: TouchPanel<MainTouchPanelHandler>,
         counter: usize,
     }
 
     #[local]
     struct Local {}
+
+    pub struct MainTouchPanelHandler {}
+    impl TouchPanelEventHandler for MainTouchPanelHandler {
+        fn on_click(&self, touchpoint: TouchPoint) {
+            draw_rectangle::spawn(touchpoint.x.into(), touchpoint.y.into(), 10, 10, Rgb565::RED);
+        }
+
+        fn on_slide(&self, touchpoint: TouchPoint) {
+            draw_rectangle::spawn(touchpoint.x.into(), touchpoint.y.into(), 10, 10, Rgb565::GREEN);
+        }
+    }
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -62,12 +76,21 @@ mod pinetimers {
 
         let timer0: MonoTimer<TIMER0> = MonoTimer::new(ctx.device.TIMER0);
 
+        // Set up GPIOTE
+        let gpiote = Gpiote::new(ctx.device.GPIOTE);
+
         // Set up button
         gpio.p0_15.into_push_pull_output(Level::High);
         let button_input_pin = gpio.p0_13.into_floating_input().degrade();
 
+        // Fire event on button press
+        gpiote.channel0()
+            .input_pin(&button_input_pin)
+            .lo_to_hi()
+            .enable_interrupt();
+
         // Set up SPI
-        let spi_pins = Pins {
+        let spi_pins = spim::Pins {
             sck: gpio.p0_02.into_push_pull_output(Level::Low).degrade(),
             mosi: Some(gpio.p0_03.into_push_pull_output(Level::Low).degrade()),
             miso: Some(gpio.p0_04.into_floating_input().degrade())
@@ -75,18 +98,30 @@ mod pinetimers {
         let spi = Spim::new(
             ctx.device.SPIM0,
             spi_pins,
-            Frequency::M8,
+            spim::Frequency::M8,
             MODE_3,
             0
         );
 
-        // Set up GPIOTE
-        let gpiote = Gpiote::new(ctx.device.GPIOTE);
-        // Fire event on button press
-        gpiote.channel0()
-            .input_pin(&button_input_pin)
+        // Set up TWIM (I²C)
+        let twim_pins = twim::Pins {
+            sda: gpio.p0_06.into_floating_input().degrade(),
+            scl: gpio.p0_07.into_floating_input().degrade(),
+        };
+        let mut twim = Twim::new(
+            ctx.device.TWIM1,
+            twim_pins,
+            twim::Frequency::K250
+        );
+        twim.enable();
+
+        // Set up touch panel
+        let tp_int_pin = gpio.p0_28.into_floating_input().degrade();
+        gpiote.channel1()
+            .input_pin(&tp_int_pin)
             .lo_to_hi()
             .enable_interrupt();
+        let touchpanel = TouchPanel::new(twim, Some(MainTouchPanelHandler{}));
 
         // Set up display
         let display: Display<Rgb565> = Display::new(
@@ -108,11 +143,13 @@ mod pinetimers {
             Delay::new(ctx.core.SYST),
         );
 
-        display_init::spawn_after(1.secs()).unwrap();
+        display_init::spawn().unwrap();
 
         (Shared {
             display,
             gpiote,
+            touchpanel,
+
             counter: 0,
         }, Local {}, init::Monotonics(timer0))
     }
@@ -145,17 +182,29 @@ mod pinetimers {
         });
     }
 
-    #[task(binds = GPIOTE, shared = [gpiote, counter])]
+    #[task(binds = GPIOTE, shared = [gpiote, counter, touchpanel])]
     fn gpiote_interrupt(ctx: gpiote_interrupt::Context) {
-        (ctx.shared.gpiote, ctx.shared.counter).lock(|gpiote, counter| {
+        (ctx.shared.gpiote, ctx.shared.counter, ctx.shared.touchpanel).lock(|gpiote, counter, touchpanel| {
             if gpiote.channel0().is_event_triggered() {
                 *counter += 1;
+            } else if gpiote.channel1().is_event_triggered() {
+                touchpanel.handle_interrupt();
             } else {
                 panic!("Unknown channel triggered");
             }
             gpiote.reset_events()
         });
         write_counter::spawn().unwrap();
+    }
+
+    #[task(shared = [display])]
+    fn draw_rectangle(mut ctx: draw_rectangle::Context, x: i32, y: i32, width: u32, height: u32, color: Rgb565) {
+        ctx.shared.display.lock(|display| {
+            Rectangle::new(Point::new(x, y), Size::new(width, height))
+                .into_styled(PrimitiveStyle::with_fill(color))
+                .draw(display)
+                .unwrap();
+        });
     }
 }
 
