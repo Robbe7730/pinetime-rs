@@ -8,6 +8,8 @@ use nrf52832_hal::delay::Delay;
 
 use alloc::vec::Vec;
 
+use spin::Mutex;
+
 use core::fmt::{self, Debug, Formatter};
 use core::marker::PhantomData;
 
@@ -36,7 +38,7 @@ pub struct Display<COLOR, SPIM: 'static> {
 
     // Spi can be 'static because it is accessible as long as the device is
     // powered on.
-    spi: Spim<SPIM>,   // Serial interface (has no read!)
+    spi: &'static Mutex<Option<Spim<SPIM>>>,   // Serial interface (has no read!)
     delay: Delay,       // Delay source
 
     _pixel: PhantomData<COLOR>,
@@ -83,14 +85,21 @@ where
     }
     
     fn transmit_byte(&mut self, b: &TransmissionByte) {
+        // Using try_lock instead of lock() to avoid deadlocks
+
+        // If this panics, you probably used both flash and display
+        // at the same time
+        let mut spi_lock = self.spi.try_lock().unwrap();
+        let mut spi = (*spi_lock).as_mut().unwrap();
+
         match b {
             TransmissionByte::Data(d) => {
                 self.pin_command_data.set_high().unwrap();
-                <Spim<SPIM> as Write<u8>>::write(&mut self.spi, &[*d]).unwrap();
+                <Spim<SPIM> as Write<u8>>::write(&mut spi, &[*d]).unwrap();
             },
             TransmissionByte::Command(c) => {
                 self.pin_command_data.set_low().unwrap();
-                <Spim<SPIM> as Write<u8>>::write(&mut self.spi, &[*c]).unwrap();
+                <Spim<SPIM> as Write<u8>>::write(&mut spi, &[*c]).unwrap();
             },
         }
     }
@@ -213,7 +222,7 @@ where
         pin_command_data: Pin<Output<PushPull>>,
         pin_chip_select: Pin<Output<PushPull>>,
         pin_reset: Pin<Output<PushPull>>,
-        spi: Spim<SPIM>,
+        spi: &'static Mutex<Option<Spim<SPIM>>>,
         delay: Delay,
     ) -> Display<COLOR, SPIM> {
         Self {

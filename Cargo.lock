@@ -418,6 +418,7 @@ dependencies = [
  "linked_list_allocator",
  "nrf52832-hal",
  "rtt-target",
+ "spin",
  "tinybmp",
 ]
 

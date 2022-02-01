@@ -14,6 +14,7 @@ mod pinetimers {
     use crate::drivers::display::Display;
     use crate::drivers::touchpanel::TouchPanel;
     use crate::drivers::battery::Battery;
+    use crate::drivers::flash::FlashMemory;
     use crate::devicestate::DeviceState;
 
     use crate::ui::screen::{Screen, ScreenMain};
@@ -33,22 +34,25 @@ mod pinetimers {
 
     use alloc::boxed::Box;
 
+    use spin::Mutex;
+
     use fugit::ExtU32;
 
     #[monotonic(binds = TIMER0, default = true)]
     type Mono0 = MonoTimer<TIMER0>;
 
     type DisplayColor = Rgb565;
-    type DisplaySpim = SPIM0;
+    type ConnectedSpim = SPIM0;
 
     #[shared]
     struct Shared {
         gpiote: Gpiote,
 
-        display: Display<DisplayColor, DisplaySpim>,
+        display: Display<DisplayColor, ConnectedSpim>,
         touchpanel: TouchPanel,
+        flash: FlashMemory,
 
-        current_screen: Box<dyn Screen<Display<DisplayColor, DisplaySpim>>>,
+        current_screen: Box<dyn Screen<Display<DisplayColor, ConnectedSpim>>>,
         devicestate: DeviceState,
 
         counter: usize,
@@ -57,7 +61,7 @@ mod pinetimers {
     #[local]
     struct Local {}
 
-    #[init]
+    #[init(local = [spi_lock: Mutex<Option<Spim<ConnectedSpim>>> = Mutex::new(None)])]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         rtt_init_print!();
         rprintln!("Pijn tijd");
@@ -123,6 +127,7 @@ mod pinetimers {
             MODE_3,
             0
         );
+        *ctx.local.spi_lock = Mutex::new(Some(spi));
 
         // Set up TWIM (I²C)
         let twim_pins = twim::Pins {
@@ -145,7 +150,7 @@ mod pinetimers {
         let touchpanel = TouchPanel::new(twim);
 
         // Set up display
-        let display: Display<DisplayColor, DisplaySpim> = Display::new(
+        let display: Display<DisplayColor, ConnectedSpim> = Display::new(
             // Backlight pins
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
             gpio.p0_22.into_push_pull_output(Level::High).degrade(),
@@ -160,9 +165,17 @@ mod pinetimers {
             // Reset pin
             gpio.p0_26.into_push_pull_output(Level::High).degrade(),
 
-            spi,
+            ctx.local.spi_lock,
             Delay::new(ctx.core.SYST),
         );
+
+        // Set up flash
+        let mut flash = FlashMemory::new(
+            ctx.local.spi_lock,
+            gpio.p0_05.into_push_pull_output(Level::High).degrade(),
+        );
+        rprintln!("{:#?}", flash.read_identification());
+        rprintln!("{:#?}", flash.read_status_registers());
 
         // Set up the UI
         let screen = Box::new(ScreenMain::new());
@@ -175,6 +188,7 @@ mod pinetimers {
 
             display,
             touchpanel,
+            flash,
 
             current_screen: screen,
             devicestate: DeviceState::new(battery),
@@ -223,7 +237,7 @@ mod pinetimers {
         draw_screen::spawn().unwrap();
     }
 
-    #[task(shared = [devicestate])]
+    #[task(shared = [devicestate, flash])]
     fn periodic_update_device_state(mut ctx: periodic_update_device_state::Context) {
         periodic_update_device_state::spawn_after(5.secs()).unwrap();
 
@@ -246,7 +260,7 @@ mod pinetimers {
     }
 
     #[task(shared = [current_screen])]
-    fn transition(mut ctx: transition::Context, new_screen: Box<dyn Screen<Display<DisplayColor, DisplaySpim>>>) {
+    fn transition(mut ctx: transition::Context, new_screen: Box<dyn Screen<Display<DisplayColor, ConnectedSpim>>>) {
         (ctx.shared.current_screen).lock(|current_screen| {
             *current_screen = new_screen;
         });
@@ -274,6 +288,10 @@ fn panic(info: &PanicInfo) -> ! {
 static HEAP: LockedHeap = LockedHeap::empty();
 
 #[alloc_error_handler]
-fn on_oom(_layout: Layout) -> ! {
-    panic!("Out of memory");
+fn on_oom(layout: Layout) -> ! {
+    rprintln!("----- OOM -----");
+    rprintln!("{:#?}", layout);
+    loop {
+        cortex_m::asm::bkpt();
+    }
 }
