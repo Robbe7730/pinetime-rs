@@ -41,7 +41,9 @@ impl Battery {
     pub fn get_state(&mut self) -> BatteryState {
         let value_adc = self.saadc.read(&mut self.voltage_pin).unwrap() as u16;
 
-        let value: f32 = (value_adc as f32) * (6.6 / f32::from(u16::MAX));
+        // value_adc is 14 bit, so divide by 2 ** 14, times reference voltage
+        // (3.3V), times 2
+        let value: f32 = (value_adc as f32) / 16384.0  * 3.3 * 2.0;
 
         self.state = match self.charging_state_pin.is_high() {
             Ok(true)  => BatteryState::Discharging(value),

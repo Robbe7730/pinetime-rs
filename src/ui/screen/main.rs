@@ -1,6 +1,7 @@
 use crate::ui::screen::{Screen, ScreenPoes};
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::{Display, DisplaySupported};
+use crate::drivers::battery::BatteryState;
 use crate::devicestate::DeviceState;
 
 use embedded_graphics::prelude::{Point, Drawable, DrawTarget};
@@ -55,7 +56,13 @@ where
             .draw(display)
             .unwrap();
 
-        Text::with_baseline(&format!("{:?}", devicestate.battery), Point::new(0, 20), character_style, Baseline::Top)
+        let battery_text = match devicestate.battery {
+            BatteryState::Charging(v) => format!("Charging: {:.2}V", v),
+            BatteryState::Discharging(v) => format!("Disharging: {:.2}V", v),
+            BatteryState::Unknown => format!("Unknown"),
+        };
+
+        Text::with_baseline(&battery_text, Point::new(0, 20), character_style, Baseline::Top)
             .draw(display)
             .unwrap();
     }
