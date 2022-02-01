@@ -1,6 +1,6 @@
 use crate::ui::screen::{Screen, ScreenPoes};
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
-use crate::drivers::display::{Display, DisplaySupported};
+use crate::drivers::display::DisplaySupported;
 use crate::drivers::battery::BatteryState;
 use crate::devicestate::DeviceState;
 
@@ -33,11 +33,13 @@ impl TouchPanelEventHandler for ScreenMainEventHandler {
     }
 }
 
-impl<COLOR : RgbColor + Send + Debug> Screen<COLOR> for ScreenMain<COLOR>
+impl<DISPLAY, COLOR> Screen<DISPLAY> for ScreenMain<DISPLAY>
 where
-    Display<COLOR>: DisplaySupported<COLOR>,
+    DISPLAY: DisplaySupported<COLOR> + DrawTarget<Color = COLOR> + Send + Debug,
+    <DISPLAY as DrawTarget>::Error: Debug,
+    COLOR: RgbColor
 {
-    fn new() -> ScreenMain<COLOR> {
+    fn new() -> ScreenMain<DISPLAY> {
         ScreenMain {
             event_handler: Arc::new(ScreenMainEventHandler {}),
             _marker: PhantomData,
@@ -48,10 +50,10 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw(&self, display: &mut Display<COLOR>, devicestate: &DeviceState) {
-        display.clear(COLOR::WHITE).unwrap();
-        let mut character_style = MonoTextStyle::new(&FONT_10X20, COLOR::BLACK);
-        character_style.set_background_color(Some(COLOR::WHITE));
+    fn draw(&self, display: &mut DISPLAY, devicestate: &DeviceState) {
+        display.clear(RgbColor::WHITE).unwrap();
+        let mut character_style = MonoTextStyle::new(&FONT_10X20, RgbColor::BLACK);
+        character_style.set_background_color(Some(RgbColor::WHITE));
         Text::with_baseline("MAIN SCREEN", Point::new(0, 0), character_style, Baseline::Top)
             .draw(display)
             .unwrap();

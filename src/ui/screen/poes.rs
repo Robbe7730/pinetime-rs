@@ -1,10 +1,10 @@
 use crate::ui::screen::{Screen, ScreenMain};
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
-use crate::drivers::display::{Display, DisplaySupported};
+use crate::drivers::display::DisplaySupported;
 use crate::devicestate::DeviceState;
 
 use embedded_graphics::pixelcolor::{RgbColor, PixelColor};
-use embedded_graphics::prelude::{Drawable, Point};
+use embedded_graphics::prelude::{Drawable, Point, DrawTarget};
 use embedded_graphics::image::{Image, ImageRawLE, ImageDrawable};
 
 use core::marker::PhantomData;
@@ -30,13 +30,14 @@ impl TouchPanelEventHandler for ScreenPoesEventHandler {
     }
 }
 
-impl<'a, COLOR : RgbColor + Send + Debug> Screen<COLOR> for ScreenPoes<COLOR>
+impl<'a, DISPLAY, COLOR> Screen<DISPLAY> for ScreenPoes<DISPLAY>
 where
-    Display<COLOR>: DisplaySupported<COLOR>,
-    COLOR: From<<COLOR as PixelColor>::Raw>,
+    DISPLAY: DisplaySupported<COLOR> + DrawTarget<Color = COLOR> + Send + Debug,
+    <DISPLAY as DrawTarget>::Error: Debug,
+    COLOR: From<<COLOR as PixelColor>::Raw> + RgbColor,
     ImageRawLE<'a, COLOR>: ImageDrawable<Color = COLOR>,
 {
-    fn new() -> ScreenPoes<COLOR> {
+    fn new() -> ScreenPoes<DISPLAY> {
         ScreenPoes {
             event_handler: Arc::new(ScreenPoesEventHandler {}),
             _marker: PhantomData,
@@ -47,7 +48,7 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw(&self, display: &mut Display<COLOR>, _devicestate: &DeviceState) {
+    fn draw(&self, display: &mut DISPLAY, _devicestate: &DeviceState) {
         let bmp_data = include_bytes!("../../../poes565.bmp");
         let image = Bmp::<COLOR>::from_slice(bmp_data).unwrap();
         Image::new(&image, Point::new(0,0))

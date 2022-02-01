@@ -6,21 +6,23 @@ use embedded_graphics_core::prelude::PointsIter;
 use embedded_graphics_core::Pixel;
 
 use nrf52832_hal::prelude::OutputPin;
+use nrf52832_hal::spim;
 
 use crate::drivers::display::{Display, DisplaySupported};
 use crate::drivers::display::commands::DisplayCommand;
 
 use core::convert::Infallible;
 
-impl<T> OriginDimensions for Display<T> {
+impl<COLOR, SPIM> OriginDimensions for Display<COLOR, SPIM> {
     fn size(&self) -> Size {
         Size::new(240, 240)
     }
 }
 
-impl<PIXEL : PixelColor> DrawTarget for Display<PIXEL>
+impl<PIXEL : PixelColor, SPIM> DrawTarget for Display<PIXEL, SPIM>
 where
-    Display<PIXEL>: DisplaySupported<PIXEL>
+    Display<PIXEL, SPIM>: DisplaySupported<PIXEL>,
+    SPIM: spim::Instance
 {
     type Color = PIXEL;
     type Error = Infallible;

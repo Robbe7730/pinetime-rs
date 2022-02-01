@@ -20,7 +20,7 @@ mod pinetimers {
 
     use rtt_target::{rprintln, rtt_init_print};
 
-    use nrf52832_hal::pac::TIMER0;
+    use nrf52832_hal::pac::{TIMER0, SPIM0};
     use nrf52832_hal::gpio::{Level, p0};
     use nrf52832_hal::gpiote::Gpiote;
     use nrf52832_hal::spim::{self, MODE_3, Spim};
@@ -38,16 +38,17 @@ mod pinetimers {
     #[monotonic(binds = TIMER0, default = true)]
     type Mono0 = MonoTimer<TIMER0>;
 
-    type COLOR = Rgb565;
+    type DisplayColor = Rgb565;
+    type DisplaySpim = SPIM0;
 
     #[shared]
     struct Shared {
         gpiote: Gpiote,
 
-        display: Display<COLOR>,
+        display: Display<DisplayColor, DisplaySpim>,
         touchpanel: TouchPanel,
 
-        current_screen: Box<dyn Screen<COLOR>>,
+        current_screen: Box<dyn Screen<Display<DisplayColor, DisplaySpim>>>,
         devicestate: DeviceState,
 
         counter: usize,
@@ -112,6 +113,7 @@ mod pinetimers {
         let spi_pins = spim::Pins {
             sck: gpio.p0_02.into_push_pull_output(Level::Low).degrade(),
             mosi: Some(gpio.p0_03.into_push_pull_output(Level::Low).degrade()),
+            // MISO is not connected for the LCD, but is for flash memory
             miso: Some(gpio.p0_04.into_floating_input().degrade())
         };
         let spi = Spim::new(
@@ -143,7 +145,7 @@ mod pinetimers {
         let touchpanel = TouchPanel::new(twim);
 
         // Set up display
-        let display: Display<COLOR> = Display::new(
+        let display: Display<DisplayColor, DisplaySpim> = Display::new(
             // Backlight pins
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
             gpio.p0_22.into_push_pull_output(Level::High).degrade(),
@@ -163,7 +165,7 @@ mod pinetimers {
         );
 
         // Set up the UI
-        let screen: Box<dyn Screen<COLOR>> = Box::new(ScreenMain::new());
+        let screen = Box::new(ScreenMain::new());
 
         display_init::spawn().unwrap();
         periodic_update_device_state::spawn_after(5.secs()).unwrap();
@@ -193,7 +195,7 @@ mod pinetimers {
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
             display.init();
-            display.clear(COLOR::WHITE).unwrap();
+            display.clear(RgbColor::WHITE).unwrap();
         });
         draw_screen::spawn().unwrap();
     }
@@ -244,7 +246,7 @@ mod pinetimers {
     }
 
     #[task(shared = [current_screen])]
-    fn transition(mut ctx: transition::Context, new_screen: Box<dyn Screen<COLOR>>) {
+    fn transition(mut ctx: transition::Context, new_screen: Box<dyn Screen<Display<DisplayColor, DisplaySpim>>>) {
         (ctx.shared.current_screen).lock(|current_screen| {
             *current_screen = new_screen;
         });

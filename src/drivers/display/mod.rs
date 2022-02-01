@@ -3,12 +3,12 @@ use nrf52832_hal::prelude::_embedded_hal_blocking_spi_Write as Write;
 use nrf52832_hal::prelude::_embedded_hal_blocking_delay_DelayMs as DelayMs;
 use nrf52832_hal::prelude::_embedded_hal_blocking_delay_DelayUs as DelayUs;
 use nrf52832_hal::gpio::{Pin, Output, PushPull};
-use nrf52832_hal::spim::Spim;
-use nrf52832_hal::pac::SPIM0;
+use nrf52832_hal::spim::{self, Spim};
 use nrf52832_hal::delay::Delay;
 
 use alloc::vec::Vec;
 
+use core::fmt::{self, Debug, Formatter};
 use core::marker::PhantomData;
 
 use commands::{DisplayCommand, RGBPixelFormat, ControlPixelFormat};
@@ -24,7 +24,7 @@ pub enum TransmissionByte {
     Command(u8),            // CD pin needs to be low
 }
 
-pub struct Display<COLOR> {
+pub struct Display<COLOR, SPIM: 'static> {
     pin_backlight_low: Pin<Output<PushPull>>,   // Set backlight brightness (3 bits)
     pin_backlight_mid: Pin<Output<PushPull>>,
     pin_backlight_high: Pin<Output<PushPull>>,
@@ -34,10 +34,25 @@ pub struct Display<COLOR> {
     pin_command_data: Pin<Output<PushPull>>,    // Low = command, High = data
     pin_chip_select: Pin<Output<PushPull>>,     // Low = enabled, High = disabled
 
-    spi: Spim<SPIM0>,   // Serial interface (has no read!)
+    // Spi can be 'static because it is accessible as long as the device is
+    // powered on.
+    spi: Spim<SPIM>,   // Serial interface (has no read!)
     delay: Delay,       // Delay source
 
     _pixel: PhantomData<COLOR>,
+}
+
+impl<COLOR, SPIM> Debug for Display<COLOR, SPIM> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        fmt.debug_struct("Display")
+            .field("pin_backlight_low", &self.pin_backlight_low.pin())
+            .field("pin_backlight_mid", &self.pin_backlight_mid.pin())
+            .field("pin_backlight_high", &self.pin_backlight_high.pin())
+            .field("pin_reset", &self.pin_reset.pin())
+            .field("pin_command_data", &self.pin_command_data.pin())
+            .field("pin_chip_select", &self.pin_chip_select.pin())
+            .finish()
+    }
 }
 
 pub trait DisplaySupported<COLOR> {
@@ -45,9 +60,10 @@ pub trait DisplaySupported<COLOR> {
     fn transmit_color(&mut self, color: COLOR);
 }
 
-impl<COLOR> Display<COLOR>
+impl<COLOR, SPIM> Display<COLOR, SPIM>
 where
-    Display<COLOR>: DisplaySupported<COLOR>
+    Display<COLOR, SPIM>: DisplaySupported<COLOR>,
+    SPIM: spim::Instance,
 {
     fn send(&mut self, command: DisplayCommand) {
         self.pin_chip_select.set_low().unwrap();
@@ -70,11 +86,11 @@ where
         match b {
             TransmissionByte::Data(d) => {
                 self.pin_command_data.set_high().unwrap();
-                <Spim<SPIM0> as Write<u8>>::write(&mut self.spi, &[*d]).unwrap();
+                <Spim<SPIM> as Write<u8>>::write(&mut self.spi, &[*d]).unwrap();
             },
             TransmissionByte::Command(c) => {
                 self.pin_command_data.set_low().unwrap();
-                <Spim<SPIM0> as Write<u8>>::write(&mut self.spi, &[*c]).unwrap();
+                <Spim<SPIM> as Write<u8>>::write(&mut self.spi, &[*c]).unwrap();
             },
         }
     }
@@ -197,9 +213,9 @@ where
         pin_command_data: Pin<Output<PushPull>>,
         pin_chip_select: Pin<Output<PushPull>>,
         pin_reset: Pin<Output<PushPull>>,
-        spi: Spim<SPIM0>,
+        spi: Spim<SPIM>,
         delay: Delay,
-    ) -> Display<COLOR> {
+    ) -> Display<COLOR, SPIM> {
         Self {
             pin_backlight_low,
             pin_backlight_mid,
@@ -218,7 +234,10 @@ where
     }
 }
 
-impl DisplaySupported<Rgb565> for Display<Rgb565> {
+impl<SPIM> DisplaySupported<Rgb565> for Display<Rgb565, SPIM>
+where
+    SPIM: spim::Instance,
+{
     fn set_pixel_config(&mut self) {
         self.set_interface_pixel_format(
             RGBPixelFormat::Format65K,
@@ -238,7 +257,10 @@ impl DisplaySupported<Rgb565> for Display<Rgb565> {
     }
 }
 
-impl DisplaySupported<Rgb666> for Display<Rgb666> {
+impl<SPIM> DisplaySupported<Rgb666> for Display<Rgb666, SPIM>
+where
+    SPIM: spim::Instance,
+{
     fn set_pixel_config(&mut self) {
         self.set_interface_pixel_format(
             RGBPixelFormat::Format262K,
@@ -256,7 +278,10 @@ impl DisplaySupported<Rgb666> for Display<Rgb666> {
     }
 }
 
-impl DisplaySupported<Gray2> for Display<Gray2> {
+impl<SPIM> DisplaySupported<Gray2> for Display<Gray2, SPIM>
+where
+    SPIM: spim::Instance,
+{
     fn set_pixel_config(&mut self) {
         self.set_interface_pixel_format(
             RGBPixelFormat::Format262K,
