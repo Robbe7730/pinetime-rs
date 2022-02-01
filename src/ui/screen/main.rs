@@ -51,7 +51,7 @@ where
     }
 
     fn draw(&self, display: &mut DISPLAY, devicestate: &DeviceState) {
-        display.clear(RgbColor::WHITE).unwrap();
+        // display.clear(RgbColor::WHITE).unwrap();
         let mut character_style = MonoTextStyle::new(&FONT_10X20, RgbColor::BLACK);
         character_style.set_background_color(Some(RgbColor::WHITE));
         Text::with_baseline("MAIN SCREEN", Point::new(0, 0), character_style, Baseline::Top)
@@ -60,7 +60,7 @@ where
 
         let battery_text = match devicestate.battery {
             BatteryState::Charging(v) => format!("Charging: {:.2}V", v),
-            BatteryState::Discharging(v) => format!("Disharging: {:.2}V", v),
+            BatteryState::Discharging(v) => format!("Discharging: {:.2}V", v),
             BatteryState::Unknown => format!("Unknown"),
         };
 
