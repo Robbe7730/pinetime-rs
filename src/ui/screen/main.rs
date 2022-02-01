@@ -67,5 +67,9 @@ where
         Text::with_baseline(&battery_text, Point::new(0, 20), character_style, Baseline::Top)
             .draw(display)
             .unwrap();
+
+        Text::with_baseline(&format!("Counter: {}", devicestate.counter), Point::new(0, 40), character_style, Baseline::Top)
+            .draw(display)
+            .unwrap();
     }
 }

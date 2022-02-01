@@ -4,6 +4,7 @@ pub struct DeviceState {
     battery_driver: Battery,
 
     pub battery: BatteryState,
+    pub counter: usize,
 }
 
 impl DeviceState {
@@ -13,6 +14,7 @@ impl DeviceState {
             battery_driver,
 
             battery,
+            counter: 0,
         }
     }
 
