@@ -2,8 +2,11 @@ use nrf52832_hal::spim::Spim;
 use nrf52832_hal::pac::SPIM0;
 use nrf52832_hal::gpio::{Pin, Output, PushPull};
 
+use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::vec;
+use alloc::{vec, format};
+
+use rtt_target::rprintln;
 
 use spin::Mutex;
 
@@ -26,6 +29,7 @@ enum FlashCommand {
     ChipErase,
     ResetEnable,
     Reset,
+    SectorErase(u32),
 }
 
 #[derive(Debug)]
@@ -93,10 +97,15 @@ impl From<FlashCommand> for Vec<u8> {
             FlashCommand::ReadIdentification => vec![0x9f],
             FlashCommand::ReadStatusRegister0 => vec![0x05],
             FlashCommand::ReadStatusRegister1 => vec![0x35],
-            FlashCommand::ChipErase => vec![0xc7], // TODO: confirm this is 0x60 or 0xc7
+            FlashCommand::ChipErase => vec![0xc7],
             FlashCommand::ResetEnable => vec![0x66],
             FlashCommand::Reset => vec![0x99],
-        }
+            FlashCommand::SectorErase(a) => vec![
+                0x20,
+                ((a >> 16) & 0xff).try_into().unwrap(),
+                ((a >>  8) & 0xff).try_into().unwrap(),
+                ((a      ) & 0xff).try_into().unwrap(),
+            ],}
     }
 }
 
@@ -148,10 +157,12 @@ impl FlashMemory {
     }
 
     fn set_write_enable(&mut self, value: bool) {
-        if value {
-            self.send(FlashCommand::WriteEnable);
-        } else {
-            self.send(FlashCommand::WriteDisable);
+        while self.read_status_registers().write_enable != value {
+            if value {
+                self.send(FlashCommand::WriteEnable);
+            } else {
+                self.send(FlashCommand::WriteDisable);
+            }
         }
     }
 
@@ -197,19 +208,73 @@ impl FlashMemory {
         // Write Enable gets reset automatically
     }
 
+    // Erase the sector (4096 bytes) `address` is in
+    pub fn erase_sector(&mut self, address: u32) {
+        self.set_write_enable(true);
+
+        self.send(FlashCommand::SectorErase(address));
+
+        while self.read_status_registers().write_in_progress {}
+    }
+
     // Read flash memory starting from address `start` with length `len`
     pub fn read(&mut self, start: u32, len: u32) -> Vec<u8> {
         self.transfer(FlashCommand::Read(start), len)
     }
 
-    // Write contents of `buffer` to address `start` (blocking)
-    pub fn write(&mut self, start: u32, buffer: &[u8]) {
+    fn write_same_page(&mut self, start: u32, buffer: Vec<u8>) {
         self.set_write_enable(true);
-
-        self.send(FlashCommand::Write(start, buffer.to_vec()));
-
+        self.send(FlashCommand::Write(start, buffer));
         while self.read_status_registers().write_in_progress {}
 
         // Write Enable gets reset automatically
+    }
+
+    // Write contents of `buffer` to address `start` (blocking)
+    pub fn write(&mut self, start: u32, buffer: Vec<u8>) {
+
+        let page_start = start & 0x00ffff00;
+        let mut in_current_page = 0x100 - (start - page_start);
+        let mut remaining = buffer;
+        let mut i = start;
+
+        while remaining.len() > (in_current_page as usize) {
+            let new_remaining = remaining.split_off(in_current_page as usize);
+
+            self.write_same_page(i, remaining);
+
+            remaining = new_remaining;
+            i += in_current_page;
+            in_current_page = 0x100;
+        }
+
+        self.write_same_page(i, remaining);
+    }
+
+    pub fn self_test(&mut self) -> Result<(), String> {
+        let address = 0x0001_2345;
+        for byte_amount in [1, 10, 300, 1000] {
+            self.erase_sector(address);
+            let mut buffer = self.read(address, byte_amount);
+            for i in 0..buffer.len() {
+                buffer[i] = (i + (byte_amount as usize)) as u8;
+            }
+            let before = buffer.clone();
+            self.write(address, buffer);
+            buffer = self.read(address, byte_amount);
+            if buffer != before {
+                for i in 0..buffer.len() {
+                    if buffer[i] != before[i] {
+                        rprintln!("{}: {} <-> {}", i, before[i], buffer[i]);
+                    }
+                }
+                return Err(format!(
+                    "Reading/writing {} byte(s) failed",
+                    byte_amount,
+                ));
+            }
+        }
+
+        Ok(())
     }
 }

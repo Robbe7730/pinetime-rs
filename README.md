@@ -12,7 +12,7 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
     - [x] Driver
     - [x] [embedded_graphics](https://github.com/embedded-graphics/embedded-graphics) interface
 - [x] CST816S Touch controller
-- [x] XT25F32B-S 4KB external flash
+- [x] XT25F32B-S 4MiB external flash
     - [ ] Index trait interface?
 - [ ] Real-Time Clock
 - [ ] Bluetooth

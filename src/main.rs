@@ -170,15 +170,15 @@ mod pinetimers {
         );
 
         // Set up flash
-        let mut flash = FlashMemory::new(
+        let flash = FlashMemory::new(
             ctx.local.spi_lock,
             gpio.p0_05.into_push_pull_output(Level::High).degrade(),
         );
-        rprintln!("{:#?}", flash.read_identification());
-        rprintln!("{:#?}", flash.read_status_registers());
 
         // Set up the UI
         let screen = Box::new(ScreenMain::new());
+
+        // self_test::spawn().unwrap();
 
         display_init::spawn().unwrap();
         periodic_update_device_state::spawn_after(5.secs()).unwrap();
@@ -237,7 +237,7 @@ mod pinetimers {
         draw_screen::spawn().unwrap();
     }
 
-    #[task(shared = [devicestate, flash])]
+    #[task(shared = [devicestate])]
     fn periodic_update_device_state(mut ctx: periodic_update_device_state::Context) {
         periodic_update_device_state::spawn_after(5.secs()).unwrap();
 
@@ -256,6 +256,13 @@ mod pinetimers {
             ctx.shared.devicestate
         ).lock(|display, current_screen, devicestate| {
             current_screen.draw(display, devicestate);
+        });
+    }
+
+    #[task(shared = [flash])]
+    fn self_test(mut ctx: self_test::Context) {
+        ctx.shared.flash.lock(|flash| {
+            flash.self_test().unwrap();
         });
     }
 
