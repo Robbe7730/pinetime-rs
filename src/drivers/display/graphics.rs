@@ -37,8 +37,13 @@ where
                     p.0.y.try_into().unwrap(),
                     p.1
                 );
-                self.select_area(row, col, row+1, col+1);
+
+                self.select_area(row, col, row, col);
+
+                self.pin_chip_select.set_low().unwrap();
+                self.send_no_cs(DisplayCommand::StartRamWrite);
                 self.transmit_color(color);
+                self.pin_chip_select.set_high().unwrap();
             }
         });
 

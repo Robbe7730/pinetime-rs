@@ -1,12 +1,12 @@
 use crate::drivers::battery::{BatteryState, Battery};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::NaiveDateTime;
 
 pub struct DeviceState {
     battery_driver: Battery,
 
     pub battery: BatteryState,
     pub counter: usize,
-    pub datetime: DateTime<Utc>,
+    pub datetime: NaiveDateTime,
 }
 
 impl DeviceState {
@@ -17,7 +17,7 @@ impl DeviceState {
 
             battery,
             counter: 0,
-            datetime: Utc.timestamp(0, 0),
+            datetime: NaiveDateTime::from_timestamp(1643831255, 0),
         }
     }
 

@@ -29,7 +29,7 @@ mod pinetimers {
     use nrf52832_hal::twim::{self, Twim};
     use nrf52832_hal::delay::Delay;
     use nrf52832_hal::saadc::{Saadc, SaadcConfig};
-    use nrf52832_hal::rtc::{Rtc, RtcInterrupt};
+    use nrf52832_hal::rtc::Rtc;
     use nrf52832_hal::clocks::Clocks;
 
     use chrono::Duration;
@@ -195,7 +195,6 @@ mod pinetimers {
         // self_test::spawn().unwrap();
 
         display_init::spawn().unwrap();
-        periodic_update_device_state::spawn_after(5.secs()).unwrap();
 
         (Shared {
             gpiote,
@@ -221,9 +220,9 @@ mod pinetimers {
     fn display_init(mut ctx: display_init::Context) {
         ctx.shared.display.lock(|display| {
             display.init();
-            display.clear(RgbColor::WHITE).unwrap();
+            display.clear(RgbColor::BLACK).unwrap();
         });
-        draw_screen::spawn().unwrap();
+        periodic_update_device_state::spawn().unwrap();
     }
 
     #[task(binds = GPIOTE, shared = [gpiote, touchpanel, current_screen, devicestate])]
@@ -250,8 +249,7 @@ mod pinetimers {
 
     #[task(shared = [devicestate, rtc])]
     fn periodic_update_device_state(ctx: periodic_update_device_state::Context) {
-        //periodic_update_device_state::spawn_after(1.secs()).unwrap();
-        periodic_update_device_state::spawn_after(500.millis()).unwrap();
+        periodic_update_device_state::spawn_after(1.secs()).unwrap();
 
         (
             ctx.shared.devicestate,
