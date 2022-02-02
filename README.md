@@ -13,8 +13,9 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
     - [x] [embedded_graphics](https://github.com/embedded-graphics/embedded-graphics) interface
 - [x] CST816S Touch controller
 - [x] XT25F32B-S 4MiB external flash
+    - [ ] Buffered read/write (page-level to allow page erase)
     - [ ] Index trait interface?
-- [ ] Real-Time Clock
+- [x] Real-Time Clock
 - [ ] Bluetooth
 - [ ] MCUBoot/InfiniTime bootloader support
 - [ ] HRS3300 Heartrate Sensor

@@ -15,19 +15,24 @@ mod pinetimers {
     use crate::drivers::touchpanel::TouchPanel;
     use crate::drivers::battery::Battery;
     use crate::drivers::flash::FlashMemory;
+
     use crate::devicestate::DeviceState;
 
     use crate::ui::screen::{Screen, ScreenMain};
 
     use rtt_target::{rprintln, rtt_init_print};
 
-    use nrf52832_hal::pac::{TIMER0, SPIM0};
+    use nrf52832_hal::pac::{TIMER0, SPIM0, RTC1};
     use nrf52832_hal::gpio::{Level, p0};
     use nrf52832_hal::gpiote::Gpiote;
     use nrf52832_hal::spim::{self, MODE_3, Spim};
     use nrf52832_hal::twim::{self, Twim};
     use nrf52832_hal::delay::Delay;
     use nrf52832_hal::saadc::{Saadc, SaadcConfig};
+    use nrf52832_hal::rtc::{Rtc, RtcInterrupt};
+    use nrf52832_hal::clocks::Clocks;
+
+    use chrono::Duration;
 
     use embedded_graphics::pixelcolor::{Rgb565, RgbColor};
     use embedded_graphics_core::draw_target::DrawTarget;
@@ -43,10 +48,12 @@ mod pinetimers {
 
     type DisplayColor = Rgb565;
     type ConnectedSpim = SPIM0;
+    type ConnectedRtc = RTC1;
 
     #[shared]
     struct Shared {
         gpiote: Gpiote,
+        rtc: Rtc<ConnectedRtc>,
 
         display: Display<DisplayColor, ConnectedSpim>,
         touchpanel: TouchPanel,
@@ -173,6 +180,15 @@ mod pinetimers {
             gpio.p0_05.into_push_pull_output(Level::High).degrade(),
         );
 
+        // Enable LFCLK
+        let clocks = Clocks::new(ctx.device.CLOCK);
+        clocks.start_lfclk();
+
+        // Set up RTC
+        // Prescaler value for 8Hz (125ms period)
+        let rtc = Rtc::new(ctx.device.RTC1, 4095).unwrap();
+        rtc.enable_counter();
+
         // Set up the UI
         let screen = Box::new(ScreenMain::new());
 
@@ -183,6 +199,7 @@ mod pinetimers {
 
         (Shared {
             gpiote,
+            rtc,
 
             display,
             touchpanel,
@@ -196,7 +213,6 @@ mod pinetimers {
     #[idle]
     fn idle(_ctx: idle::Context) -> ! {
         loop {
-            rprintln!("IDLE");
             cortex_m::asm::wfi();
         }
     }
@@ -232,12 +248,21 @@ mod pinetimers {
         draw_screen::spawn().unwrap();
     }
 
-    #[task(shared = [devicestate])]
-    fn periodic_update_device_state(mut ctx: periodic_update_device_state::Context) {
-        periodic_update_device_state::spawn_after(5.secs()).unwrap();
+    #[task(shared = [devicestate, rtc])]
+    fn periodic_update_device_state(ctx: periodic_update_device_state::Context) {
+        //periodic_update_device_state::spawn_after(1.secs()).unwrap();
+        periodic_update_device_state::spawn_after(500.millis()).unwrap();
 
-        ctx.shared.devicestate.lock(|devicestate| {
+        (
+            ctx.shared.devicestate,
+            ctx.shared.rtc,
+        ).lock(|devicestate, rtc| {
             devicestate.update_battery();
+            let new_counter = rtc.get_counter().try_into().unwrap();
+            devicestate.datetime = devicestate.datetime + Duration::milliseconds(
+                125i64 * (new_counter - devicestate.counter) as i64
+            );
+            devicestate.counter = new_counter;
         });
 
         draw_screen::spawn().unwrap();

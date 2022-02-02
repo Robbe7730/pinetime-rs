@@ -71,5 +71,9 @@ where
         Text::with_baseline(&format!("Counter: {}", devicestate.counter), Point::new(0, 40), character_style, Baseline::Top)
             .draw(display)
             .unwrap();
+
+        Text::with_baseline(&format!("{:?}", devicestate.datetime), Point::new(0, 60), character_style, Baseline::Top)
+            .draw(display)
+            .unwrap();
     }
 }
