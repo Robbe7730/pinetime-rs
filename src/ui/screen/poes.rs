@@ -25,8 +25,8 @@ pub struct ScreenPoes<COLOR> {
 pub struct ScreenPoesEventHandler {}
 
 impl TouchPanelEventHandler for ScreenPoesEventHandler {
-    fn on_click(&self, _point: TouchPoint) {
-        crate::pinetimers::transition::spawn(Box::new(ScreenMain::new())).unwrap();
+    fn on_event(&self, _point: TouchPoint) {
+        crate::tasks::transition::spawn(Box::new(ScreenMain::new())).unwrap();
     }
 }
 
@@ -48,7 +48,9 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw(&self, display: &mut DISPLAY, _devicestate: &DeviceState) {
+    fn draw_update(&mut self, _display: &mut DISPLAY, _devicestate: &DeviceState) {}
+
+    fn draw_init(&mut self, display: &mut DISPLAY, _devicestate: &DeviceState) {
         let bmp_data = include_bytes!("../../../poes565.bmp");
         let image = Bmp::<COLOR>::from_slice(bmp_data).unwrap();
         Image::new(&image, Point::new(0,0))

@@ -1,5 +1,5 @@
-use crate::ui::screen::Screen;
-use crate::drivers::touchpanel::TouchPanelEventHandler;
+use crate::ui::screen::{Screen, ScreenPoes};
+use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::DisplaySupported;
 use crate::devicestate::DeviceState;
 
@@ -18,6 +18,7 @@ use chrono::Timelike;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::vec;
+use alloc::boxed::Box;
 
 #[derive(Debug)]
 pub struct ScreenMain<COLOR> {
@@ -29,7 +30,11 @@ pub struct ScreenMain<COLOR> {
 #[derive(Debug)]
 pub struct ScreenMainEventHandler {}
 
-impl TouchPanelEventHandler for ScreenMainEventHandler {}
+impl TouchPanelEventHandler for ScreenMainEventHandler {
+    fn on_slide_up(&self, _p: TouchPoint) {
+        crate::tasks::transition::spawn(Box::new(ScreenPoes::new())).unwrap();
+    }
+}
 
 impl<DISPLAY, COLOR> ScreenMain<DISPLAY>
 where
@@ -71,9 +76,11 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw(&mut self, display: &mut DISPLAY, devicestate: &DeviceState) {
+    fn draw_init(&mut self, display: &mut DISPLAY, _devicestate: &DeviceState) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
+
+        display.clear(COLOR::BLACK).unwrap();
 
         Circle::with_center(clock_center, clock_radius * 2)
             .into_styled(
@@ -84,6 +91,11 @@ where
             )
             .draw(display)
             .unwrap();
+    }
+
+    fn draw_update(&mut self, display: &mut DISPLAY, devicestate: &DeviceState) {
+        let clock_center = Point::new(120, 120);
+        let clock_radius = 90;
 
         let clear_style = PrimitiveStyleBuilder::new()
             .stroke_color(COLOR::BLACK)
@@ -108,7 +120,7 @@ where
                 clock_center
             ),
             self.get_hand(
-                (devicestate.datetime.time().hour() as f64) * (PI / 30.0),
+                (devicestate.datetime.time().hour() as f64) * (PI / 6.0),
                 clock_radius as f64 * 0.75,
                 clock_center
             ),

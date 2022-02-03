@@ -16,7 +16,6 @@ pub fn gpiote_interrupt(ctx: crate::tasks::gpiote_interrupt::Context) {
         } else {
             panic!("Unknown channel triggered");
         }
-        gpiote.reset_events()
+        gpiote.reset_events();
     });
-    crate::tasks::draw_screen::spawn().unwrap();
 }

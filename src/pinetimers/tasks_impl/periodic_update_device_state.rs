@@ -19,5 +19,5 @@ pub fn periodic_update_device_state(ctx: crate::tasks::periodic_update_device_st
         devicestate.counter = new_counter;
     });
 
-    crate::tasks::draw_screen::spawn().unwrap();
+    crate::tasks::redraw_screen::spawn().unwrap();
 }
