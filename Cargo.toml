@@ -20,3 +20,5 @@ tinybmp = "0.3.1"
 spin = "0.9.2"
 chrono = { version = "0.4.19", default-features = false, features = ["alloc"] }
 libm = "0.2.1"
+rubble = { git = "https://github.com/jonas-schievink/rubble", branch = "master" }
+rubble-nrf5x = { git = "https://github.com/jonas-schievink/rubble", branch = "master", features = ["52832"] }

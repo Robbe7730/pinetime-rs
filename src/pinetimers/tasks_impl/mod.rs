@@ -6,6 +6,9 @@ mod redraw_screen;
 mod self_test;
 mod transition;
 mod init_screen;
+mod radio;
+mod ble_worker;
+mod ble_timer;
 
 pub use idle::idle;
 pub use display_init::display_init;
@@ -15,3 +18,6 @@ pub use redraw_screen::redraw_screen;
 pub use self_test::self_test;
 pub use transition::transition;
 pub use init_screen::init_screen;
+pub use radio::radio;
+pub use ble_worker::ble_worker;
+pub use ble_timer::ble_timer;

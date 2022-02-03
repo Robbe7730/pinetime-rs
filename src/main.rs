@@ -11,7 +11,7 @@ extern crate alloc;
 
 // This module is basically a pass-through for pinetimers::tasks_impl, which 
 // makes it possible to have separate files for tasks.
-#[rtic::app(device = nrf52832_hal::pac, dispatchers = [SWI0_EGU0])]
+#[rtic::app(device = nrf52832_hal::pac, dispatchers = [SWI0_EGU0, SWI1_EGU1])]
 mod tasks {
     use crate::drivers::timer::MonoTimer;
     use crate::drivers::display::Display;
@@ -26,6 +26,10 @@ mod tasks {
     use nrf52832_hal::gpiote::Gpiote;
     use nrf52832_hal::rtc::Rtc;
     use nrf52832_hal::spim::Spim;
+
+    use rubble::link::{MIN_PDU_BUF, LinkLayer, Responder};
+    use rubble_nrf5x::radio::{PacketBuffer, BleRadio};
+    use rubble::link::queue::SimpleQueue;
 
     use crate::pinetimers::{ConnectedRtc, ConnectedSpim, PixelType};
 
@@ -44,6 +48,9 @@ mod tasks {
         display: Display<PixelType, ConnectedSpim>,
         touchpanel: TouchPanel,
         flash: FlashMemory,
+        bluetooth: BleRadio,
+        ble_ll: LinkLayer<crate::pinetimers::init::BluetoothConfig>,
+        ble_r: Responder<crate::pinetimers::init::BluetoothConfig>,
 
         current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
         devicestate: DeviceState,
@@ -63,6 +70,9 @@ mod tasks {
                 display: init_shared.display,
                 touchpanel: init_shared.touchpanel,
                 flash: init_shared.flash,
+                bluetooth: init_shared.bluetooth,
+                ble_ll: init_shared.ble_ll,
+                ble_r: init_shared.ble_r,
 
                 current_screen: init_shared.current_screen,
                 devicestate: init_shared.devicestate
@@ -76,7 +86,14 @@ mod tasks {
         }
     }
 
-    #[init(local = [spi_lock: Mutex<Option<Spim<crate::pinetimers::ConnectedSpim>>> = Mutex::new(None)])]
+    // Allocate here to make them 'static
+    #[init(local = [
+            spi_lock: Mutex<Option<Spim<crate::pinetimers::ConnectedSpim>>> = Mutex::new(None),
+            ble_tx_buf: PacketBuffer = [0; MIN_PDU_BUF],
+            ble_rx_buf: PacketBuffer = [0; MIN_PDU_BUF],
+            ble_tx_queue: SimpleQueue = SimpleQueue::new(),
+            ble_rx_queue: SimpleQueue = SimpleQueue::new(),
+    ])]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         let (shared, local, mono) = crate::pinetimers::init::init(ctx);
 
@@ -121,6 +138,21 @@ mod tasks {
     #[task(shared = [current_screen])]
     fn transition(ctx: transition::Context, new_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>) {
         crate::pinetimers::tasks_impl::transition(ctx, new_screen)
+    }
+
+    #[task(binds = RADIO, shared = [bluetooth, ble_ll], priority = 3)]
+    fn radio(ctx: radio::Context) {
+        crate::pinetimers::tasks_impl::radio(ctx)
+    }
+
+    #[task(shared = [ble_r], priority = 2)]
+    fn ble_worker(ctx: ble_worker::Context) {
+        crate::pinetimers::tasks_impl::ble_worker(ctx)
+    }
+
+    #[task(binds = TIMER2, shared = [bluetooth, ble_ll], priority = 3)]
+    fn ble_timer(ctx: ble_timer::Context) {
+        crate::pinetimers::tasks_impl::ble_timer(ctx)
     }
 }
 

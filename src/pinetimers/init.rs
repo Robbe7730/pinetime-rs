@@ -14,6 +14,17 @@ use alloc::boxed::Box;
 
 use spin::Mutex;
 
+use rubble_nrf5x::radio::BleRadio;
+use rubble_nrf5x::utils::get_device_address;
+use rubble_nrf5x::timer::BleTimer;
+use rubble::link::{LinkLayer, Responder};
+use rubble::link::ad_structure::AdStructure;
+use rubble::link::queue::PacketQueue;
+use rubble::l2cap::{BleChannelMap, L2CAPState};
+use rubble::security::NoSecurity;
+use rubble::link::queue::SimpleQueue;
+use rubble::gatt::BatteryServiceAttrs;
+
 use crate::drivers::display::Display;
 use crate::drivers::timer::MonoTimer;
 use crate::drivers::touchpanel::TouchPanel;
@@ -22,6 +33,15 @@ use crate::ui::screen::{Screen, ScreenMain};
 use crate::drivers::battery::Battery;
 use crate::drivers::flash::FlashMemory;
 
+pub enum BluetoothConfig {}
+
+impl rubble::config::Config for BluetoothConfig {
+    type Timer = BleTimer<crate::pinetimers::BluetoothTimer>;
+    type Transmitter = BleRadio;
+    type ChannelMapper = BleChannelMap<BatteryServiceAttrs, NoSecurity>;
+    type PacketQueue = &'static mut SimpleQueue;
+}
+
 pub struct Shared {
     pub gpiote: Gpiote,
     pub rtc: Rtc<super::ConnectedRtc>,
@@ -29,6 +49,9 @@ pub struct Shared {
     pub display: Display<super::PixelType, super::ConnectedSpim>,
     pub touchpanel: TouchPanel,
     pub flash: FlashMemory,
+    pub bluetooth: BleRadio,
+    pub ble_ll: LinkLayer<BluetoothConfig>,
+    pub ble_r: Responder<BluetoothConfig>,
 
     pub current_screen: Box<dyn Screen<Display<super::PixelType, super::ConnectedSpim>>>,
     pub devicestate: DeviceState,
@@ -36,7 +59,7 @@ pub struct Shared {
 
 pub struct Local {}
 
-pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::init::Monotonics) {
+pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::init::Monotonics) {
         rtt_init_print!();
         rprintln!("Pijn tijd");
 
@@ -150,13 +173,55 @@ pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::i
         );
 
         // Enable LFCLK
-        let clocks = Clocks::new(ctx.device.CLOCK);
-        clocks.start_lfclk();
+        Clocks::new(ctx.device.CLOCK)
+            .start_lfclk()
+            .enable_ext_hfosc(); // Bluetooth needs this
 
         // Set up RTC
         // Prescaler value for 8Hz (125ms period)
         let rtc = Rtc::new(ctx.device.RTC1, 4095).unwrap();
         rtc.enable_counter();
+
+        // Set up Bluetooth
+        // TODO: Put this in a separate driver
+        let device_address = get_device_address();
+        rprintln!("{:?}", device_address);
+
+        // Not sure what this does...
+        ctx.core.DCB.enable_trace();
+        ctx.core.DWT.enable_cycle_counter();
+        
+        let mut bluetooth = BleRadio::new(
+            ctx.device.RADIO,
+            &ctx.device.FICR,
+            ctx.local.ble_tx_buf,
+            ctx.local.ble_rx_buf,
+        );
+
+        let ble_timer = BleTimer::init(ctx.device.TIMER2);
+
+        // Set up queues
+        let (tx_prod, tx_cons) = ctx.local.ble_tx_queue.split();
+        let (rx_prod, rx_cons) = ctx.local.ble_rx_queue.split();
+
+        let mut ble_ll = LinkLayer::<BluetoothConfig>::new(device_address, ble_timer);
+
+        let ble_r = Responder::<BluetoothConfig>::new(
+            tx_prod,
+            rx_cons,
+            L2CAPState::new(BleChannelMap::with_attributes(BatteryServiceAttrs::new())),
+        );
+
+        let next_update = ble_ll
+            .start_advertise(
+                rubble::time::Duration::from_millis(200),
+                &[AdStructure::CompleteLocalName("pinetime-rs")],
+                &mut bluetooth,
+                tx_cons,
+                rx_prod,
+            )
+            .unwrap();
+        ble_ll.timer().configure_interrupt(next_update);
 
         // Set up the UI
         let screen = Box::new(ScreenMain::new());
@@ -172,6 +237,9 @@ pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::i
             display,
             touchpanel,
             flash,
+            bluetooth,
+            ble_ll,
+            ble_r,
 
             current_screen: screen,
             devicestate: DeviceState::new(battery),
