@@ -17,6 +17,7 @@ mod tasks {
     use crate::drivers::display::Display;
     use crate::drivers::touchpanel::TouchPanel;
     use crate::drivers::flash::FlashMemory;
+    use crate::drivers::bluetooth::Bluetooth;
 
     use crate::devicestate::DeviceState;
 
@@ -27,8 +28,8 @@ mod tasks {
     use nrf52832_hal::rtc::Rtc;
     use nrf52832_hal::spim::Spim;
 
-    use rubble::link::{MIN_PDU_BUF, LinkLayer, Responder};
-    use rubble_nrf5x::radio::{PacketBuffer, BleRadio};
+    use rubble::link::MIN_PDU_BUF;
+    use rubble_nrf5x::radio::PacketBuffer;
     use rubble::link::queue::SimpleQueue;
 
     use crate::pinetimers::{ConnectedRtc, ConnectedSpim, PixelType};
@@ -48,9 +49,7 @@ mod tasks {
         display: Display<PixelType, ConnectedSpim>,
         touchpanel: TouchPanel,
         flash: FlashMemory,
-        bluetooth: BleRadio,
-        ble_ll: LinkLayer<crate::pinetimers::init::BluetoothConfig>,
-        ble_r: Responder<crate::pinetimers::init::BluetoothConfig>,
+        bluetooth: Bluetooth,
 
         current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
         devicestate: DeviceState,
@@ -71,8 +70,6 @@ mod tasks {
                 touchpanel: init_shared.touchpanel,
                 flash: init_shared.flash,
                 bluetooth: init_shared.bluetooth,
-                ble_ll: init_shared.ble_ll,
-                ble_r: init_shared.ble_r,
 
                 current_screen: init_shared.current_screen,
                 devicestate: init_shared.devicestate
@@ -140,17 +137,17 @@ mod tasks {
         crate::pinetimers::tasks_impl::transition(ctx, new_screen)
     }
 
-    #[task(binds = RADIO, shared = [bluetooth, ble_ll], priority = 3)]
-    fn radio(ctx: radio::Context) {
-        crate::pinetimers::tasks_impl::radio(ctx)
+    #[task(binds = RADIO, shared = [bluetooth], priority = 3)]
+    fn ble_radio(ctx: ble_radio::Context) {
+        crate::pinetimers::tasks_impl::ble_radio(ctx)
     }
 
-    #[task(shared = [ble_r], priority = 2)]
+    #[task(shared = [bluetooth], priority = 2)]
     fn ble_worker(ctx: ble_worker::Context) {
         crate::pinetimers::tasks_impl::ble_worker(ctx)
     }
 
-    #[task(binds = TIMER2, shared = [bluetooth, ble_ll], priority = 3)]
+    #[task(binds = TIMER2, shared = [bluetooth], priority = 3)]
     fn ble_timer(ctx: ble_timer::Context) {
         crate::pinetimers::tasks_impl::ble_timer(ctx)
     }
