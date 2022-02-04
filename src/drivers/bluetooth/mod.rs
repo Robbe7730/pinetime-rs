@@ -1,6 +1,8 @@
 mod config;
+mod attribute_provider;
 
 use config::BluetoothConfig;
+use attribute_provider::BluetoothAttributeProvider;
 
 use crate::pinetimers::BluetoothTimer;
 
@@ -15,14 +17,14 @@ use rubble::l2cap::{L2CAPState, BleChannelMap};
 use rubble::link::ad_structure::AdStructure;
 use rubble::time::Timer;
 
-use rubble::gatt::BatteryServiceAttrs;
-
 pub struct Bluetooth {
     linklayer: LinkLayer<BluetoothConfig>,
     radio: BleRadio,
     responder: Responder<BluetoothConfig>,
 }
 
+// TODO: add power_on function that re-runs start_advertise and configure_interrupt
+//      --> Problem: tx_cons and rx_prod are owned by start_advertise
 impl Bluetooth {
     pub fn new(
         radio: RADIO,
@@ -53,7 +55,7 @@ impl Bluetooth {
         let ble_r = Responder::<BluetoothConfig>::new(
             tx_prod,
             rx_cons,
-            L2CAPState::new(BleChannelMap::with_attributes(BatteryServiceAttrs::new())),
+            L2CAPState::new(BleChannelMap::with_attributes(BluetoothAttributeProvider::new())),
         );
 
         let next_update = ble_ll
