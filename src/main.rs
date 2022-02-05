@@ -4,7 +4,6 @@
 
 mod drivers;
 mod ui;
-mod devicestate;
 mod pinetimers;
 
 extern crate alloc;
@@ -19,21 +18,21 @@ mod tasks {
     use crate::drivers::flash::FlashMemory;
     use crate::drivers::bluetooth::Bluetooth;
     use crate::drivers::battery::Battery;
-
-    use crate::devicestate::DeviceState;
+    use crate::drivers::clock::Clock;
 
     use crate::ui::screen::Screen;
 
+    use crate::pinetimers::{ConnectedSpim, PixelType, ConnectedRtc};
+
     use nrf52832_hal::pac::TIMER0;
     use nrf52832_hal::gpiote::Gpiote;
-    use nrf52832_hal::rtc::Rtc;
     use nrf52832_hal::spim::Spim;
 
     use rubble::link::MIN_PDU_BUF;
     use rubble_nrf5x::radio::PacketBuffer;
     use rubble::link::queue::SimpleQueue;
 
-    use crate::pinetimers::{ConnectedRtc, ConnectedSpim, PixelType};
+    use chrono::NaiveDateTime;
 
     use alloc::boxed::Box;
 
@@ -45,16 +44,15 @@ mod tasks {
     #[shared]
     struct Shared {
         gpiote: Gpiote,
-        rtc: Rtc<ConnectedRtc>,
 
         display: Display<PixelType, ConnectedSpim>,
         touchpanel: TouchPanel,
         flash: FlashMemory,
         bluetooth: Bluetooth,
         battery: Battery,
+        clock: Clock<ConnectedRtc>,
 
         current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
-        devicestate: DeviceState,
     }
 
     #[local]
@@ -62,26 +60,25 @@ mod tasks {
 
     // I'm using a separate struct and into() to allow the init function
     // to be in a separate crate as Shared and Local cannot be made pub
-    impl From<crate::pinetimers::init::Shared> for Shared {
-        fn from(init_shared: crate::pinetimers::init::Shared) -> Shared {
+    impl From<crate::pinetimers::tasks_impl::init::Shared> for Shared {
+        fn from(init_shared: crate::pinetimers::tasks_impl::init::Shared) -> Shared {
             Shared {
                 gpiote: init_shared.gpiote,
-                rtc: init_shared.rtc,
 
                 display: init_shared.display,
                 touchpanel: init_shared.touchpanel,
                 flash: init_shared.flash,
                 bluetooth: init_shared.bluetooth,
                 battery: init_shared.battery,
+                clock: init_shared.clock,
 
                 current_screen: init_shared.current_screen,
-                devicestate: init_shared.devicestate
             }
         }
     }
 
-    impl From<crate::pinetimers::init::Local> for Local {
-        fn from(_init_local: crate::pinetimers::init::Local) -> Local {
+    impl From<crate::pinetimers::tasks_impl::init::Local> for Local {
+        fn from(_init_local: crate::pinetimers::tasks_impl::init::Local) -> Local {
             Local {}
         }
     }
@@ -95,7 +92,7 @@ mod tasks {
             ble_rx_queue: SimpleQueue = SimpleQueue::new(),
     ])]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
-        let (shared, local, mono) = crate::pinetimers::init::init(ctx);
+        let (shared, local, mono) = crate::pinetimers::tasks_impl::init(ctx);
 
         (shared.into(), local.into(), mono)
     }
@@ -115,17 +112,17 @@ mod tasks {
         crate::pinetimers::tasks_impl::gpiote_interrupt(ctx)
     }
 
-    #[task(shared = [devicestate, rtc])]
+    #[task(shared = [clock])]
     fn periodic_update_device_state(ctx: periodic_update_device_state::Context) {
         crate::pinetimers::tasks_impl::periodic_update_device_state(ctx)
     }
 
-    #[task(shared = [display, current_screen, devicestate])]
+    #[task(shared = [display, current_screen, clock])]
     fn redraw_screen(ctx: redraw_screen::Context) {
         crate::pinetimers::tasks_impl::redraw_screen(ctx)
     }
 
-    #[task(shared = [display, current_screen, devicestate])]
+    #[task(shared = [display, current_screen, clock])]
     fn init_screen(ctx: init_screen::Context) {
         crate::pinetimers::tasks_impl::init_screen(ctx)
     }
@@ -155,9 +152,14 @@ mod tasks {
         crate::pinetimers::tasks_impl::ble_timer(ctx)
     }
 
-    #[task(shared = [bluetooth, battery])]
+    #[task(shared = [bluetooth, battery, clock])]
     fn ble_update(ctx: ble_update::Context) {
         crate::pinetimers::tasks_impl::ble_update(ctx)
+    }
+
+    #[task(shared = [clock])]
+    fn set_time(ctx: set_time::Context, time: NaiveDateTime) {
+        crate::pinetimers::tasks_impl::set_time(ctx, time);
     }
 }
 

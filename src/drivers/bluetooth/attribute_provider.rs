@@ -3,6 +3,11 @@ use rubble::uuid::Uuid16;
 use rubble::Error;
 
 use crate::drivers::battery::{Battery, BatteryState};
+use crate::drivers::clock::Clock;
+
+use crate::pinetimers::ConnectedRtc;
+
+use chrono::{Datelike, Timelike};
 
 use alloc::vec::Vec;
 use alloc::vec;
@@ -12,12 +17,14 @@ use core::ops::BitOr;
 #[derive(Debug)]
 pub enum ServiceUUID {
     Battery,
+    CurrentTime,
 }
 
 impl ServiceUUID {
     pub fn data(&self) -> Vec<u8> {
         match self {
             ServiceUUID::Battery => vec![0x0F, 0x18],
+            ServiceUUID::CurrentTime => vec![0x05, 0x18],
         }
     }
 }
@@ -25,12 +32,14 @@ impl ServiceUUID {
 #[derive(Debug)]
 pub enum CharacteristicUUID {
     BatteryLevel,
+    DateTime,
 }
 
 impl From<&CharacteristicUUID> for u16 {
     fn from(uuid: &CharacteristicUUID) -> u16 {
         match uuid {
             CharacteristicUUID::BatteryLevel => 0x2a19,
+            CharacteristicUUID::DateTime => 0x2a08,
         }
     }
 }
@@ -141,6 +150,15 @@ impl BluetoothAttributeProvider {
                 CharacteristicUUID::BatteryLevel,
                 vec![0],
             ),
+            BluetoothAttribute::PrimaryService(ServiceUUID::CurrentTime),
+            BluetoothAttribute::Characteristic(
+                CharacteristicProperty::Read | CharacteristicProperty::Write,
+                CharacteristicUUID::DateTime
+            ),
+            BluetoothAttribute::CharacteristicValue(
+                CharacteristicUUID::DateTime,
+                vec![0, 0, 0, 0, 0, 0, 0]
+            ),
         ];
         let rubble_attributes = Self::rubble_attributes(&attributes);
         Self {
@@ -160,13 +178,12 @@ impl BluetoothAttributeProvider {
         self.rubble_attributes = Self::rubble_attributes(&self.attributes);
     }
 
-    pub fn update_data(&mut self, battery: &mut Battery) {
+    pub fn update_data(&mut self, battery: &mut Battery, clock: &Clock<ConnectedRtc>) {
         let percentage = match battery.get_state() {
             BatteryState::Charging(x) => x,
             BatteryState::Discharging(x) => x,
             BatteryState::Unknown => 0.0,
         };
-
 
         for i in 0..self.attributes.len() {
             match &self.attributes[i] {
@@ -176,6 +193,19 @@ impl BluetoothAttributeProvider {
                             BluetoothAttribute::CharacteristicValue(
                                 CharacteristicUUID::BatteryLevel,
                                 vec![percentage as u8]
+                            ),
+                        CharacteristicUUID::DateTime =>
+                            BluetoothAttribute::CharacteristicValue(
+                                CharacteristicUUID::DateTime,
+                                vec![
+                                    (clock.datetime.year() & 0xff).try_into().unwrap(),
+                                    ((clock.datetime.year() >> 8) & 0xff).try_into().unwrap(),
+                                    (clock.datetime.month() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.day() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.hour() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.minute() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.second() & 0xff).try_into().unwrap(),
+                                ]
                             )
                     };
                 },

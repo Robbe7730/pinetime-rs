@@ -5,7 +5,9 @@ pub use main::ScreenMain;
 pub use poes::ScreenPoes;
 
 use crate::drivers::touchpanel::TouchPanelEventHandler;
-use crate::devicestate::DeviceState;
+use crate::drivers::clock::Clock;
+
+use crate::pinetimers::ConnectedRtc;
 
 use core::fmt::Debug;
 
@@ -17,6 +19,6 @@ pub trait Screen<D> : Send + Debug {
     // (with Screen : TouchPanelEventHandler) to TouchPanelEventHandler,
     // because we don't know the type (and size) of the current screen...
     fn get_event_handler(&self) -> Arc<dyn TouchPanelEventHandler>;
-    fn draw_init(&mut self, display: &mut D, devicestate: &DeviceState);
-    fn draw_update(&mut self, display: &mut D, devicestate: &DeviceState);
+    fn draw_init(&mut self, display: &mut D, devicestate: &Clock<ConnectedRtc>);
+    fn draw_update(&mut self, display: &mut D, devicestate: &Clock<ConnectedRtc>);
 }

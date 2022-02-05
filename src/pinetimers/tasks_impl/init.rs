@@ -17,24 +17,24 @@ use spin::Mutex;
 use crate::drivers::display::Display;
 use crate::drivers::timer::MonoTimer;
 use crate::drivers::touchpanel::TouchPanel;
-use crate::devicestate::DeviceState;
 use crate::ui::screen::{Screen, ScreenMain};
 use crate::drivers::battery::Battery;
 use crate::drivers::flash::FlashMemory;
 use crate::drivers::bluetooth::Bluetooth;
+use crate::pinetimers::{PixelType, ConnectedSpim, ConnectedRtc};
+use crate::drivers::clock::Clock;
 
 pub struct Shared {
     pub gpiote: Gpiote,
-    pub rtc: Rtc<super::ConnectedRtc>,
 
-    pub display: Display<super::PixelType, super::ConnectedSpim>,
+    pub display: Display<PixelType, ConnectedSpim>,
     pub touchpanel: TouchPanel,
     pub flash: FlashMemory,
     pub bluetooth: Bluetooth,
     pub battery: Battery,
+    pub clock: Clock<ConnectedRtc>,
 
-    pub current_screen: Box<dyn Screen<Display<super::PixelType, super::ConnectedSpim>>>,
-    pub devicestate: DeviceState,
+    pub current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
 }
 
 pub struct Local {}
@@ -127,7 +127,7 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
         let touchpanel = TouchPanel::new(twim);
 
         // Set up display
-        let display: Display<super::PixelType, super::ConnectedSpim> = Display::new(
+        let display: Display<PixelType, ConnectedSpim> = Display::new(
             // Backlight pins
             gpio.p0_14.into_push_pull_output(Level::High).degrade(),
             gpio.p0_22.into_push_pull_output(Level::High).degrade(),
@@ -161,6 +161,7 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
         // Prescaler value for 8Hz (125ms period)
         let rtc = Rtc::new(ctx.device.RTC1, 4095).unwrap();
         rtc.enable_counter();
+        let clock = Clock::new(rtc);
 
         // Set up Bluetooth
         ctx.core.DCB.enable_trace();
@@ -184,15 +185,14 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
 
         (Shared {
             gpiote,
-            rtc,
 
             display,
             touchpanel,
             flash,
             bluetooth,
             battery,
+            clock,
 
             current_screen: screen,
-            devicestate: DeviceState::new(),
         }, Local {}, crate::tasks::init::Monotonics(timer0))
 }

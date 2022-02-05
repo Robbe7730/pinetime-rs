@@ -1,3 +1,4 @@
+pub mod init;
 mod idle;
 mod display_init;
 mod gpiote_interrupt;
@@ -10,7 +11,9 @@ mod ble_radio;
 mod ble_worker;
 mod ble_timer;
 mod ble_update;
+mod set_time;
 
+pub use init::init;
 pub use idle::idle;
 pub use display_init::display_init;
 pub use gpiote_interrupt::gpiote_interrupt;
@@ -23,3 +26,4 @@ pub use ble_radio::ble_radio;
 pub use ble_worker::ble_worker;
 pub use ble_timer::ble_timer;
 pub use ble_update::ble_update;
+pub use set_time::set_time;

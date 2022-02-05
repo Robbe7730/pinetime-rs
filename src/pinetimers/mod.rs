@@ -6,5 +6,4 @@ pub type ConnectedSpim = SPIM0;
 pub type ConnectedRtc = RTC1;
 pub type BluetoothTimer = TIMER2;
 
-pub mod init;
 pub mod tasks_impl;

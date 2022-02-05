@@ -1,7 +1,8 @@
-use crate::ui::screen::{Screen, ScreenPoes};
+use crate::ui::screen::Screen;
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::DisplaySupported;
-use crate::devicestate::DeviceState;
+use crate::drivers::clock::Clock;
+use crate::pinetimers::ConnectedRtc;
 
 use embedded_graphics::prelude::{DrawTarget, Point, Drawable, Transform};
 use embedded_graphics::pixelcolor::RgbColor;
@@ -18,7 +19,6 @@ use chrono::Timelike;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::vec;
-use alloc::boxed::Box;
 
 #[derive(Debug)]
 pub struct ScreenMain<COLOR> {
@@ -32,7 +32,6 @@ pub struct ScreenMainEventHandler {}
 
 impl TouchPanelEventHandler for ScreenMainEventHandler {
     fn on_slide_up(&self, _p: TouchPoint) {
-        crate::tasks::transition::spawn(Box::new(ScreenPoes::new())).unwrap();
     }
 }
 
@@ -76,7 +75,7 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw_init(&mut self, display: &mut DISPLAY, _devicestate: &DeviceState) {
+    fn draw_init(&mut self, display: &mut DISPLAY, _clock: &Clock<ConnectedRtc>) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
 
@@ -93,7 +92,7 @@ where
             .unwrap();
     }
 
-    fn draw_update(&mut self, display: &mut DISPLAY, devicestate: &DeviceState) {
+    fn draw_update(&mut self, display: &mut DISPLAY, clock: &Clock<ConnectedRtc>) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
 
@@ -110,17 +109,17 @@ where
 
         self.hands = vec![
             self.get_hand(
-                (devicestate.datetime.time().second() as f64) * (PI / 30.0),
+                (clock.datetime.time().second() as f64) * (PI / 30.0),
                 clock_radius as f64,
                 clock_center
             ),
             self.get_hand(
-                (devicestate.datetime.time().minute() as f64) * (PI / 30.0),
+                (clock.datetime.time().minute() as f64) * (PI / 30.0),
                 clock_radius as f64,
                 clock_center
             ),
             self.get_hand(
-                (devicestate.datetime.time().hour() as f64) * (PI / 6.0),
+                (clock.datetime.time().hour() as f64) * (PI / 6.0),
                 clock_radius as f64 * 0.75,
                 clock_center
             ),

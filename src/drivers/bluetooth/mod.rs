@@ -6,6 +6,9 @@ use attribute_provider::BluetoothAttributeProvider;
 
 use crate::pinetimers::BluetoothTimer;
 use crate::drivers::battery::Battery;
+use crate::drivers::clock::Clock;
+
+use crate::pinetimers::ConnectedRtc;
 
 use nrf52832_hal::pac::{RADIO, FICR};
 
@@ -77,11 +80,11 @@ impl Bluetooth {
         }
     }
 
-    pub fn update_data(&mut self, battery: &mut Battery) {
+    pub fn update_data(&mut self, battery: &mut Battery, clock: &Clock<ConnectedRtc>) {
         self.responder.l2cap()
             .channel_mapper()
             .attribute_provider()
-            .update_data(battery);
+            .update_data(battery, clock);
     }
 
     fn handle_cmd(&mut self, cmd: Cmd) {
