@@ -5,6 +5,7 @@ use config::BluetoothConfig;
 use attribute_provider::BluetoothAttributeProvider;
 
 use crate::pinetimers::BluetoothTimer;
+use crate::drivers::battery::Battery;
 
 use nrf52832_hal::pac::{RADIO, FICR};
 
@@ -74,6 +75,13 @@ impl Bluetooth {
             radio: ble_radio,
             responder: ble_r,
         }
+    }
+
+    pub fn update_data(&mut self, battery: &mut Battery) {
+        self.responder.l2cap()
+            .channel_mapper()
+            .attribute_provider()
+            .update_data(battery);
     }
 
     fn handle_cmd(&mut self, cmd: Cmd) {

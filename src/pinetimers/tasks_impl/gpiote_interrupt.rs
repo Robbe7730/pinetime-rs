@@ -1,18 +1,17 @@
-use rtic::mutex_prelude::TupleExt04;
+use rtic::mutex_prelude::TupleExt03;
 
 pub fn gpiote_interrupt(ctx: crate::tasks::gpiote_interrupt::Context) {
     (
         ctx.shared.gpiote,
         ctx.shared.touchpanel,
         ctx.shared.current_screen,
-        ctx.shared.devicestate
-    ).lock(|gpiote, touchpanel, current_screen, devicestate| {
+    ).lock(|gpiote, touchpanel, current_screen| {
         if gpiote.channel0().is_event_triggered() {
-            devicestate.counter += 1;
+            // Button was pressed
         } else if gpiote.channel1().is_event_triggered() {
             touchpanel.handle_interrupt(Some(current_screen.get_event_handler()));
         } else if gpiote.channel2().is_event_triggered() {
-            devicestate.update_battery();
+            // Battery state changed
         } else {
             panic!("Unknown channel triggered");
         }

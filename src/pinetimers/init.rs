@@ -31,6 +31,7 @@ pub struct Shared {
     pub touchpanel: TouchPanel,
     pub flash: FlashMemory,
     pub bluetooth: Bluetooth,
+    pub battery: Battery,
 
     pub current_screen: Box<dyn Screen<Display<super::PixelType, super::ConnectedSpim>>>,
     pub devicestate: DeviceState,
@@ -189,8 +190,9 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
             touchpanel,
             flash,
             bluetooth,
+            battery,
 
             current_screen: screen,
-            devicestate: DeviceState::new(battery),
+            devicestate: DeviceState::new(),
         }, Local {}, crate::tasks::init::Monotonics(timer0))
 }

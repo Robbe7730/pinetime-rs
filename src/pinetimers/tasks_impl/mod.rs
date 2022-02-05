@@ -9,6 +9,7 @@ mod init_screen;
 mod ble_radio;
 mod ble_worker;
 mod ble_timer;
+mod ble_update;
 
 pub use idle::idle;
 pub use display_init::display_init;
@@ -21,3 +22,4 @@ pub use init_screen::init_screen;
 pub use ble_radio::ble_radio;
 pub use ble_worker::ble_worker;
 pub use ble_timer::ble_timer;
+pub use ble_update::ble_update;

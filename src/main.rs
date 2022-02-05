@@ -18,6 +18,7 @@ mod tasks {
     use crate::drivers::touchpanel::TouchPanel;
     use crate::drivers::flash::FlashMemory;
     use crate::drivers::bluetooth::Bluetooth;
+    use crate::drivers::battery::Battery;
 
     use crate::devicestate::DeviceState;
 
@@ -50,6 +51,7 @@ mod tasks {
         touchpanel: TouchPanel,
         flash: FlashMemory,
         bluetooth: Bluetooth,
+        battery: Battery,
 
         current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
         devicestate: DeviceState,
@@ -70,6 +72,7 @@ mod tasks {
                 touchpanel: init_shared.touchpanel,
                 flash: init_shared.flash,
                 bluetooth: init_shared.bluetooth,
+                battery: init_shared.battery,
 
                 current_screen: init_shared.current_screen,
                 devicestate: init_shared.devicestate
@@ -107,7 +110,7 @@ mod tasks {
         crate::pinetimers::tasks_impl::display_init(ctx)
     }
 
-    #[task(binds = GPIOTE, shared = [gpiote, touchpanel, current_screen, devicestate])]
+    #[task(binds = GPIOTE, shared = [gpiote, touchpanel, current_screen])]
     fn gpiote_interrupt(ctx: gpiote_interrupt::Context) {
         crate::pinetimers::tasks_impl::gpiote_interrupt(ctx)
     }
@@ -150,6 +153,11 @@ mod tasks {
     #[task(binds = TIMER2, shared = [bluetooth], priority = 3)]
     fn ble_timer(ctx: ble_timer::Context) {
         crate::pinetimers::tasks_impl::ble_timer(ctx)
+    }
+
+    #[task(shared = [bluetooth, battery])]
+    fn ble_update(ctx: ble_update::Context) {
+        crate::pinetimers::tasks_impl::ble_update(ctx)
     }
 }
 

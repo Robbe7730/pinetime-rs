@@ -38,16 +38,33 @@ impl Battery {
         }
     }
 
-    pub fn get_state(&mut self) -> BatteryState {
-        let value_adc = self.saadc.read(&mut self.voltage_pin).unwrap() as u16;
+    pub fn get_voltage(&mut self) -> f32 {
+        let voltage_adc = self.saadc.read(&mut self.voltage_pin).unwrap() as u16;
 
-        // value_adc is 14 bit, so divide by 2 ** 14, times reference voltage
+        // voltage_adc is 14 bit, so divide by 2 ** 14, times reference voltage
         // (3.3V), times 2
-        let value: f32 = (value_adc as f32) / 16384.0  * 3.3 * 2.0;
+        (voltage_adc as f32) / 16384.0  * 3.3 * 2.0
+    }
+
+    pub fn get_state(&mut self) -> BatteryState {
+        let voltage_full = 4.2;
+        let voltage_empty = 3.2;
+
+        let voltage = self.get_voltage();
+
+        // This should probably be calculated using a curve, but this works for now
+        let percentage: f32;
+        if voltage < voltage_empty {
+            percentage = 0.0;
+        } else if voltage > voltage_full {
+            percentage = 100.0;
+        } else {
+            percentage = ((voltage - voltage_empty) * 100.0) / (voltage_full - voltage_empty);
+        }
 
         self.state = match self.charging_state_pin.is_high() {
-            Ok(true)  => BatteryState::Discharging(value),
-            Ok(false) => BatteryState::Charging(value),
+            Ok(true)  => BatteryState::Discharging(percentage),
+            Ok(false) => BatteryState::Charging(percentage),
             Err(_)    => BatteryState::Unknown
         };
         return self.state;

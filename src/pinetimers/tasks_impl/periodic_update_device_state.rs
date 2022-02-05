@@ -11,7 +11,6 @@ pub fn periodic_update_device_state(ctx: crate::tasks::periodic_update_device_st
         ctx.shared.devicestate,
         ctx.shared.rtc,
     ).lock(|devicestate, rtc| {
-        devicestate.update_battery();
         let new_counter = rtc.get_counter().try_into().unwrap();
         devicestate.datetime = devicestate.datetime + Duration::milliseconds(
             125i64 * (new_counter - devicestate.counter) as i64
@@ -19,5 +18,6 @@ pub fn periodic_update_device_state(ctx: crate::tasks::periodic_update_device_st
         devicestate.counter = new_counter;
     });
 
+    crate::tasks::ble_update::spawn().unwrap();
     crate::tasks::redraw_screen::spawn().unwrap();
 }
