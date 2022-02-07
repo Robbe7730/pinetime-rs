@@ -27,6 +27,8 @@ mod tasks {
     use nrf52832_hal::pac::TIMER0;
     use nrf52832_hal::gpiote::Gpiote;
     use nrf52832_hal::spim::Spim;
+    use nrf52832_hal::wdt::WatchdogHandle;
+    use nrf52832_hal::wdt::handles::HdlN;
 
     use rubble::link::MIN_PDU_BUF;
     use rubble_nrf5x::radio::PacketBuffer;
@@ -44,6 +46,7 @@ mod tasks {
     #[shared]
     struct Shared {
         gpiote: Gpiote,
+        watchdog_handles: [WatchdogHandle<HdlN> ; 1],
 
         display: Display<PixelType, ConnectedSpim>,
         touchpanel: TouchPanel,
@@ -64,6 +67,7 @@ mod tasks {
         fn from(init_shared: crate::pinetimers::tasks_impl::init::Shared) -> Shared {
             Shared {
                 gpiote: init_shared.gpiote,
+                watchdog_handles: init_shared.watchdog_handles,
 
                 display: init_shared.display,
                 touchpanel: init_shared.touchpanel,
@@ -160,6 +164,11 @@ mod tasks {
     #[task(shared = [clock])]
     fn set_time(ctx: set_time::Context, time: NaiveDateTime) {
         crate::pinetimers::tasks_impl::set_time(ctx, time);
+    }
+
+    #[task(shared = [watchdog_handles])]
+    fn pet_watchdog(ctx: pet_watchdog::Context) {
+        crate::pinetimers::tasks_impl::pet_watchdog(ctx);
     }
 }
 

@@ -9,6 +9,8 @@ use nrf52832_hal::saadc::{Saadc, SaadcConfig};
 use nrf52832_hal::clocks::Clocks;
 use nrf52832_hal::pac::TIMER0;
 use nrf52832_hal::rtc::Rtc;
+use nrf52832_hal::wdt::{Watchdog, count, WatchdogHandle};
+use nrf52832_hal::wdt::handles::HdlN;
 
 use alloc::boxed::Box;
 
@@ -33,6 +35,7 @@ pub struct Shared {
     pub bluetooth: Bluetooth,
     pub battery: Battery,
     pub clock: Clock<ConnectedRtc>,
+    pub watchdog_handles: [WatchdogHandle<HdlN> ; 1],
 
     pub current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
 }
@@ -43,12 +46,17 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
         rtt_init_print!();
         rprintln!("Pijn tijd");
 
-        // Set up heap
         unsafe {
+            // Set up heap
             let heap_start = 0x2000_1000;
             let heap_end = 0x2001_0000;
             crate::HEAP.lock().init(heap_start, heap_end - heap_start);
         }
+
+        // Set up watchdog (enabled by MCUBoot)
+        let watchdog = Watchdog::try_recover::<count::One>(ctx.device.WDT).unwrap();
+        let (watchdog_handle_0,) = watchdog.handles;
+        let watchdog_handles = [watchdog_handle_0.degrade()];
 
         let gpio = p0::Parts::new(ctx.device.P0);
 
@@ -181,10 +189,12 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
 
         // self_test::spawn().unwrap();
 
+        crate::tasks::pet_watchdog::spawn().unwrap();
         crate::tasks::display_init::spawn().unwrap();
 
         (Shared {
             gpiote,
+            watchdog_handles,
 
             display,
             touchpanel,

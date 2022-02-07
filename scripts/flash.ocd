@@ -1,0 +1,10 @@
+source [find interface/stlink.cfg]
+source [find target/nrf52.cfg]
+
+init
+
+program target/pinetime-rs.img verify 0x8000
+
+reset init
+
+resume
