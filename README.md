@@ -23,6 +23,9 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
     - [ ] OTA firmware update
         - Follow [InfiniTime's DFU protocol](https://github.com/InfiniTimeOrg/InfiniTime/blob/develop/doc/ble.md#firmware-upgrades)?
 - [ ] MCUBoot/InfiniTime bootloader support
+    - [x] Memory location (0x8000 instead of 0x0000)
+    - [x] Watchdog petting
+    - [ ] Verifying firmware
 - [ ] HRS3300 Heartrate Sensor
 - [ ] BMA423 Accelerometer
     - [ ] Step Counter
