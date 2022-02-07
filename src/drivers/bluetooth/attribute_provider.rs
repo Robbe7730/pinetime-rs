@@ -1,4 +1,4 @@
-use rubble::att::{AttributeProvider, HandleRange, Attribute, Handle, AttUuid};
+use rubble::att::{AttributeProvider, HandleRange, Attribute, Handle, AttUuid, AttributeAccessPermissions};
 use rubble::uuid::Uuid16;
 use rubble::Error;
 
@@ -7,7 +7,7 @@ use crate::drivers::clock::Clock;
 
 use crate::pinetimers::ConnectedRtc;
 
-use chrono::{Datelike, Timelike};
+use chrono::{Datelike, Timelike, NaiveDateTime, NaiveDate, NaiveTime};
 
 use alloc::vec::Vec;
 use alloc::vec;
@@ -70,6 +70,24 @@ impl From<&CharacteristicProperty> for u8 {
             CharacteristicProperty::ExtendedProperties => 0x80,
             CharacteristicProperty::Combination(v) => *v,
         }
+    }
+}
+
+impl CharacteristicProperty {
+    pub fn to_rubble(&self) -> AttributeAccessPermissions {
+        if self.includes(CharacteristicProperty::Write) {
+            if self.includes(CharacteristicProperty::Read) {
+                AttributeAccessPermissions::ReadableAndWriteable
+            } else {
+                AttributeAccessPermissions::Writeable
+            }
+        } else {
+            AttributeAccessPermissions::Readable
+        }
+    }
+
+    pub fn includes(&self, other: CharacteristicProperty) -> bool {
+        return (u8::from(self) & u8::from(&other)) != 0;
     }
 }
 
@@ -288,5 +306,52 @@ impl AttributeProvider for BluetoothAttributeProvider {
             // All others are (as far as I know) not groups
             _ => None
         }
+    }
+
+    fn attr_access_permissions(&self, handle: Handle) -> AttributeAccessPermissions {
+        // Handle 0x0001 is a service, so always Readable
+        if handle.as_u16() < 2 {
+            return AttributeAccessPermissions::Readable;
+        }
+
+        if let BluetoothAttribute::Characteristic(properties, _) = &self.attributes[handle.as_u16() as usize - 2] {
+            return properties.to_rubble();
+        }
+
+        return AttributeAccessPermissions::Readable;
+    }
+
+    fn write_attr(&mut self, handle: Handle, data: &[u8]) -> Result<(), Error> {
+        let i: usize = (handle.as_u16() - 1).into();
+
+        match &self.attributes[i] {
+            BluetoothAttribute::CharacteristicValue(CharacteristicUUID::DateTime, _) => {
+                if data.len() == 7 {
+                    self.attributes[i] = BluetoothAttribute::CharacteristicValue(
+                        CharacteristicUUID::DateTime,
+                        data.to_vec()
+                    );
+                    crate::tasks::set_time::spawn(
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd(
+                                i32::from(data[1]) << 8 | i32::from(data[0]),
+                                u32::from(data[2]),
+                                u32::from(data[3])
+                            ),
+                            NaiveTime::from_hms(
+                                u32::from(data[4]),
+                                u32::from(data[5]),
+                                u32::from(data[6])
+                            )
+                        )
+                    ).unwrap();
+                }
+            }
+            _ => {},
+        };
+
+        self.update_rubble_attributes();
+
+        Ok(())
     }
 }

@@ -19,7 +19,7 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
 - [ ] Bluetooth
     - [x] Driver
     - [x] Read battery percentage
-    - [ ] Read/write datetime
+    - [x] Read/write datetime
     - [ ] OTA firmware update
 - [ ] MCUBoot/InfiniTime bootloader support
 - [ ] HRS3300 Heartrate Sensor
