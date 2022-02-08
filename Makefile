@@ -14,6 +14,7 @@ flash_release: build
 		--header-size 32 \
 		--slot-size 475136 \
 		--pad-header \
+		--pad \
 		target/thumbv7em-none-eabihf/release/pinetime-rs.bin\
 		target/pinetime-rs.img
 	# Verify the image

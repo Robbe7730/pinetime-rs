@@ -1,7 +1,13 @@
 source [find interface/stlink.cfg]
 source [find target/nrf52.cfg]
 
+# Find using rust-nm -S target/thumbv7em-none-eabihf/release/pinetime-rs | grep RTT
+rtt setup 0x20000000 0x0fff "SEGGER RTT"
+
 init
+
+rtt start
+rtt server start 6969 0
 
 program target/pinetime-rs.img verify 0x8000
 

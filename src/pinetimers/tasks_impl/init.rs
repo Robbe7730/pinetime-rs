@@ -42,6 +42,53 @@ pub struct Shared {
 
 pub struct Local {}
 
+#[derive(Debug)]
+struct MCUBootFooter {
+    start: *mut u8,
+}
+
+impl MCUBootFooter {
+    pub fn get() -> Self {
+        let flash_length = 475104;
+        let trailer_length: usize = 40;
+
+        let start = (0x8020 + flash_length - trailer_length) as *mut u8;
+
+        let slice;
+        unsafe {
+            slice = core::slice::from_raw_parts_mut(
+                start,
+                trailer_length,
+            )
+        }
+
+        if slice[24..40] != [
+            0x77, 0xc2, 0x95, 0xf3,
+            0x60, 0xd2, 0xef, 0x7f,
+            0x35, 0x52, 0x50, 0x0f,
+            0x2c, 0xb6, 0x79, 0x80
+        ] {
+            panic!("Invalid magic for MCUBoot footer");
+        }
+
+        MCUBootFooter {
+            start
+        }
+    }
+
+    pub fn mark_valid(&mut self) {
+        unsafe {
+            *self.start.offset(0x10) = 0x01;
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        unsafe {
+            return *self.start.offset(0x10) == 0x01;
+        }
+    }
+}
+
 pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::init::Monotonics) {
         rtt_init_print!();
         rprintln!("Pijn tijd");
@@ -52,6 +99,12 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
             let heap_end = 0x2001_0000;
             crate::HEAP.lock().init(heap_start, heap_end - heap_start);
         }
+
+
+        let mut mcuboot_footer = MCUBootFooter::get();
+        rprintln!("{:x?}", mcuboot_footer.is_valid());
+        mcuboot_footer.mark_valid();
+        rprintln!("{:x?}", mcuboot_footer.is_valid());
 
         // Set up watchdog (enabled by MCUBoot)
         let watchdog = Watchdog::try_recover::<count::One>(ctx.device.WDT).unwrap();
