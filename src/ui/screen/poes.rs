@@ -2,6 +2,7 @@ use crate::ui::screen::{Screen, ScreenMain};
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::DisplaySupported;
 use crate::drivers::clock::Clock;
+use crate::drivers::mcuboot::MCUBoot;
 
 use crate::pinetimers::ConnectedRtc;
 
@@ -50,9 +51,9 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw_update(&mut self, _display: &mut DISPLAY, _devicestate: &Clock<ConnectedRtc>) {}
+    fn draw_update(&mut self, _display: &mut DISPLAY, _devicestate: &Clock<ConnectedRtc>, _: &MCUBoot) {}
 
-    fn draw_init(&mut self, display: &mut DISPLAY, _devicestate: &Clock<ConnectedRtc>) {
+    fn draw_init(&mut self, display: &mut DISPLAY, _devicestate: &Clock<ConnectedRtc>, _: &MCUBoot) {
         let bmp_data = include_bytes!("../../../poes565.bmp");
         let image = Bmp::<COLOR>::from_slice(bmp_data).unwrap();
         Image::new(&image, Point::new(0,0))

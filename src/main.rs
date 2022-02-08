@@ -19,6 +19,7 @@ mod tasks {
     use crate::drivers::bluetooth::Bluetooth;
     use crate::drivers::battery::Battery;
     use crate::drivers::clock::Clock;
+    use crate::drivers::mcuboot::MCUBoot;
 
     use crate::ui::screen::Screen;
 
@@ -54,6 +55,7 @@ mod tasks {
         bluetooth: Bluetooth,
         battery: Battery,
         clock: Clock<ConnectedRtc>,
+        mcuboot: MCUBoot,
 
         current_screen: Box<dyn Screen<Display<PixelType, ConnectedSpim>>>,
     }
@@ -68,6 +70,7 @@ mod tasks {
             Shared {
                 gpiote: init_shared.gpiote,
                 watchdog_handles: init_shared.watchdog_handles,
+                mcuboot: init_shared.mcuboot,
 
                 display: init_shared.display,
                 touchpanel: init_shared.touchpanel,
@@ -121,17 +124,17 @@ mod tasks {
         crate::pinetimers::tasks_impl::periodic_update_device_state(ctx)
     }
 
-    #[task(shared = [display, current_screen, clock])]
+    #[task(shared = [display, current_screen, clock, mcuboot])]
     fn redraw_screen(ctx: redraw_screen::Context) {
         crate::pinetimers::tasks_impl::redraw_screen(ctx)
     }
 
-    #[task(shared = [display, current_screen, clock])]
+    #[task(shared = [display, current_screen, clock, mcuboot])]
     fn init_screen(ctx: init_screen::Context) {
         crate::pinetimers::tasks_impl::init_screen(ctx)
     }
 
-    #[task(shared = [flash])]
+    #[task(shared = [flash, mcuboot])]
     fn self_test(ctx: self_test::Context) {
         crate::pinetimers::tasks_impl::self_test(ctx)
     }
@@ -169,6 +172,11 @@ mod tasks {
     #[task(shared = [watchdog_handles])]
     fn pet_watchdog(ctx: pet_watchdog::Context) {
         crate::pinetimers::tasks_impl::pet_watchdog(ctx);
+    }
+
+    #[task(shared = [mcuboot])]
+    fn validate(ctx: validate::Context) {
+        crate::pinetimers::tasks_impl::validate(ctx);
     }
 }
 

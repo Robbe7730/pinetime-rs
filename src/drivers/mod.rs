@@ -5,3 +5,4 @@ pub mod battery;
 pub mod flash;
 pub mod bluetooth;
 pub mod clock;
+pub mod mcuboot;

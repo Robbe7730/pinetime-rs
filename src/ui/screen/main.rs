@@ -3,10 +3,14 @@ use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::DisplaySupported;
 use crate::drivers::clock::Clock;
 use crate::pinetimers::ConnectedRtc;
+use crate::drivers::mcuboot::MCUBoot;
 
 use embedded_graphics::prelude::{DrawTarget, Point, Drawable, Transform};
 use embedded_graphics::pixelcolor::RgbColor;
 use embedded_graphics::primitives::{Circle, Line, Primitive, PrimitiveStyleBuilder};
+use embedded_graphics::text::{Text, Baseline};
+use embedded_graphics::mono_font::ascii::FONT_10X20;
+use embedded_graphics::mono_font::MonoTextStyle;
 
 use core::marker::PhantomData;
 use core::fmt::Debug;
@@ -19,6 +23,7 @@ use chrono::Timelike;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::vec;
+use alloc::format;
 
 #[derive(Debug)]
 pub struct ScreenMain<COLOR> {
@@ -75,7 +80,7 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw_init(&mut self, display: &mut DISPLAY, _clock: &Clock<ConnectedRtc>) {
+    fn draw_init(&mut self, display: &mut DISPLAY, _clock: &Clock<ConnectedRtc>, mcuboot: &MCUBoot) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
 
@@ -90,9 +95,20 @@ where
             )
             .draw(display)
             .unwrap();
+
+        let text_style = MonoTextStyle::new(&FONT_10X20, COLOR::WHITE);
+        Text::with_baseline(&format!(
+                "v{}.{}.{} ({})",
+                mcuboot.header.version.major,
+                mcuboot.header.version.minor,
+                mcuboot.header.version.revision,
+                mcuboot.header.version.build_num,
+            ), Point::new(0, 0), text_style, Baseline::Top)
+            .draw(display)
+            .unwrap();
     }
 
-    fn draw_update(&mut self, display: &mut DISPLAY, clock: &Clock<ConnectedRtc>) {
+    fn draw_update(&mut self, display: &mut DISPLAY, clock: &Clock<ConnectedRtc>, _: &MCUBoot) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
 

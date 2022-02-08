@@ -10,7 +10,7 @@ flash_release: build
 	# Create the image
 	imgtool create \
 		--align 4 \
-		--version 0.0.1 \
+		--version 0.0.2 \
 		--header-size 32 \
 		--slot-size 475136 \
 		--pad-header \

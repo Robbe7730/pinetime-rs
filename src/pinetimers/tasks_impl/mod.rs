@@ -13,6 +13,7 @@ mod ble_timer;
 mod ble_update;
 mod set_time;
 mod pet_watchdog;
+mod validate;
 
 pub use init::init;
 pub use idle::idle;
@@ -29,3 +30,4 @@ pub use ble_timer::ble_timer;
 pub use ble_update::ble_update;
 pub use set_time::set_time;
 pub use pet_watchdog::pet_watchdog;
+pub use validate::validate;
