@@ -21,7 +21,7 @@ use crate::drivers::timer::MonoTimer;
 use crate::drivers::touchpanel::TouchPanel;
 use crate::ui::screen::{Screen, ScreenMain};
 use crate::drivers::battery::Battery;
-use crate::drivers::flash::FlashMemory;
+use crate::drivers::flash::{InternalFlash, ExternalFlash};
 use crate::drivers::bluetooth::Bluetooth;
 use crate::pinetimers::{PixelType, ConnectedSpim, ConnectedRtc};
 use crate::drivers::clock::Clock;
@@ -33,7 +33,8 @@ pub struct Shared {
 
     pub display: Display<PixelType, ConnectedSpim>,
     pub touchpanel: TouchPanel,
-    pub flash: FlashMemory,
+    pub external_flash: ExternalFlash,
+    pub internal_flash: InternalFlash,
     pub bluetooth: Bluetooth,
     pub battery: Battery,
     pub clock: Clock<ConnectedRtc>,
@@ -54,8 +55,6 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
             let heap_end = 0x2001_0000;
             crate::HEAP.lock().init(heap_start, heap_end - heap_start);
         }
-
-        let mcuboot = MCUBoot::get();
 
         // Set up watchdog (enabled by MCUBoot)
         let watchdog = Watchdog::try_recover::<count::One>(ctx.device.WDT).unwrap();
@@ -158,11 +157,18 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
             Delay::new(ctx.core.SYST),
         );
 
-        // Set up flash
-        let flash = FlashMemory::new(
+        // Set up external flash
+        let external_flash = ExternalFlash::new(
             ctx.local.spi_lock,
             gpio.p0_05.into_push_pull_output(Level::High).degrade(),
         );
+
+        // Set up internal flash
+        let mut internal_flash = InternalFlash::new(
+            ctx.device.NVMC
+        );
+
+        let mcuboot = MCUBoot::get(&mut internal_flash);
 
         // Enable LFCLK
         Clocks::new(ctx.device.CLOCK)
@@ -199,14 +205,15 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
         (Shared {
             gpiote,
             watchdog_handles,
-            mcuboot,
 
             display,
             touchpanel,
-            flash,
+            external_flash,
+            internal_flash,
             bluetooth,
             battery,
             clock,
+            mcuboot,
 
             current_screen: screen,
         }, Local {}, crate::tasks::init::Monotonics(timer0))

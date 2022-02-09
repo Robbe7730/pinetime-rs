@@ -9,8 +9,7 @@ edition = "2021"
 cortex-m = "0.7.4"
 cortex-m-rt = "0.6.10"
 cortex-m-rtic = "1.0.0"
-nrf52832-hal = { version = "0.14.1", features = ["rt"] }
-embedded-hal = "0.2.6"
+nrf52832-hal = { git = "https://github.com/nrf-rs/nrf-hal", branch = "master", version = "0.14.1", features = ["rt"] }
 rtt-target = { version = "0.3.1", features = ["cortex-m"] }
 fugit = "0.3.3"
 embedded-graphics-core = "0.3.3"
@@ -20,5 +19,6 @@ tinybmp = "0.3.1"
 spin = "0.9.2"
 chrono = { version = "0.4.19", default-features = false, features = ["alloc"] }
 libm = "0.2.1"
-rubble = { git = "https://github.com/jonas-schievink/rubble", branch = "master" }
-rubble-nrf5x = { git = "https://github.com/jonas-schievink/rubble", branch = "master", features = ["52832"] }
+rubble = { git = "https://github.com/Robbe7730/rubble", branch = "master" }
+rubble-nrf5x = { git = "https://github.com/Robbe7730/rubble", branch = "master", features = ["52832"] }
+embedded-storage = "0.3.0"

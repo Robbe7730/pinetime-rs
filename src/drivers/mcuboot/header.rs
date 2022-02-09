@@ -1,6 +1,4 @@
-// This is ONLY fine because rtic handles the locking, only one thread can have
-// an instance, so they should be safe to Send
-unsafe impl Send for MCUBootHeader {}
+use crate::drivers::flash::InternalFlash;
 
 #[derive(Debug)]
 pub struct MCUBootHeaderVersion {
@@ -16,39 +14,28 @@ pub struct MCUBootHeader {
 }
 
 impl MCUBootHeader {
-    pub fn get() -> Self {
-        let header_length = 0x20;
-        let start = 0x8000 as *mut u8;
-
-        let slice;
-        unsafe {
-            slice = core::slice::from_raw_parts_mut(
-                start,
-                header_length,
-            )
-        }
-
-        if slice[0..4] != [
+    pub fn get(internal_flash: &mut InternalFlash) -> Self {
+        let mut data = [0; 32];
+        internal_flash.read(0x00000000, &mut data).unwrap();
+        if data[0..4] != [
             0x3d, 0xb8, 0xf3, 0x96
         ] {
             panic!("Invalid magic for MCUBoot header");
         }
 
-        let version = unsafe {
-            MCUBootHeaderVersion {
-                major: *start.offset(20),
-                minor: *start.offset(21),
-                revision: u16::from_le_bytes([
-                    *start.offset(22),
-                    *start.offset(23),
-                ]),
-                build_num: u32::from_le_bytes([
-                    *start.offset(24),
-                    *start.offset(25),
-                    *start.offset(26),
-                    *start.offset(27),
-                ]),
-            }
+        let version = MCUBootHeaderVersion {
+            major: data[20],
+            minor: data[21],
+            revision: u16::from_le_bytes([
+                data[22],
+                data[23],
+            ]),
+            build_num: u32::from_le_bytes([
+                data[24],
+                data[25],
+                data[26],
+                data[27],
+            ]),
         };
 
         MCUBootHeader {

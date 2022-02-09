@@ -257,9 +257,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-dma"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c8c02e4347a0267ca60813c952017f4c5948c232474c6010a381a337f1bda4"
+checksum = "994f7e5b5cb23521c22304927195f236813053eb9c065dd2226a32ba64695446"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -299,9 +299,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-storage"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "723dce4e9f25b6e6c5f35628e144794e5b459216ed7da97b7c4b66cdb3fa82ca"
+checksum = "156d7a2fdd98ebbf9ae579cbceca3058cff946e13f8e17b90e3511db0508c723"
 
 [[package]]
 name = "ff"
@@ -492,8 +492,7 @@ dependencies = [
 [[package]]
 name = "nrf-hal-common"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd37b3fd039327b4005cc0d4ef20bce0a41bf521071774d5adb854e4b1230639"
+source = "git+https://github.com/nrf-rs/nrf-hal?branch=master#a183676033343859f85323c04c9dae2836694f10"
 dependencies = [
  "cast",
  "cfg-if",
@@ -511,8 +510,7 @@ dependencies = [
 [[package]]
 name = "nrf52832-hal"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab294edacf4c940c9a0495a60a809a5c89a86e586d3d1f293b5ea94b4aa82744"
+source = "git+https://github.com/nrf-rs/nrf-hal?branch=master#a183676033343859f85323c04c9dae2836694f10"
 dependencies = [
  "embedded-hal",
  "nrf-hal-common",
@@ -521,9 +519,9 @@ dependencies = [
 
 [[package]]
 name = "nrf52832-pac"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76f5dec47cf294f40a53cc62b6d9032a5ffae998c045c517cce5acaf482350d7"
+checksum = "e649284d1cde4aef5c43ea32588553cfd31a9b7ce5fccdac98f012399382c33a"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -580,7 +578,7 @@ dependencies = [
  "cortex-m-rtic",
  "embedded-graphics",
  "embedded-graphics-core",
- "embedded-hal",
+ "embedded-storage",
  "fugit",
  "libm",
  "linked_list_allocator",
@@ -721,7 +719,7 @@ dependencies = [
 [[package]]
 name = "rubble"
 version = "0.0.4"
-source = "git+https://github.com/jonas-schievink/rubble?branch=master#cd6a3c3ee24cff8900257e8ad3a0db9588c898d5"
+source = "git+https://github.com/Robbe7730/rubble?branch=master#d598c0b6bb90af1599f24a44cbb1de2dc026ccc0"
 dependencies = [
  "bitflags",
  "defmt",
@@ -735,7 +733,7 @@ dependencies = [
 [[package]]
 name = "rubble-nrf5x"
 version = "0.0.4"
-source = "git+https://github.com/jonas-schievink/rubble?branch=master#cd6a3c3ee24cff8900257e8ad3a0db9588c898d5"
+source = "git+https://github.com/Robbe7730/rubble?branch=master#d598c0b6bb90af1599f24a44cbb1de2dc026ccc0"
 dependencies = [
  "nrf52832-pac",
  "rubble",

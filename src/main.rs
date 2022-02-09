@@ -15,7 +15,7 @@ mod tasks {
     use crate::drivers::timer::MonoTimer;
     use crate::drivers::display::Display;
     use crate::drivers::touchpanel::TouchPanel;
-    use crate::drivers::flash::FlashMemory;
+    use crate::drivers::flash::{InternalFlash, ExternalFlash};
     use crate::drivers::bluetooth::Bluetooth;
     use crate::drivers::battery::Battery;
     use crate::drivers::clock::Clock;
@@ -51,7 +51,8 @@ mod tasks {
 
         display: Display<PixelType, ConnectedSpim>,
         touchpanel: TouchPanel,
-        flash: FlashMemory,
+        internal_flash: InternalFlash,
+        external_flash: ExternalFlash,
         bluetooth: Bluetooth,
         battery: Battery,
         clock: Clock<ConnectedRtc>,
@@ -73,7 +74,8 @@ mod tasks {
 
                 display: init_shared.display,
                 touchpanel: init_shared.touchpanel,
-                flash: init_shared.flash,
+                internal_flash: init_shared.internal_flash,
+                external_flash: init_shared.external_flash,
                 bluetooth: init_shared.bluetooth,
                 battery: init_shared.battery,
                 clock: init_shared.clock,
@@ -134,7 +136,7 @@ mod tasks {
         crate::pinetimers::tasks_impl::init_screen(ctx)
     }
 
-    #[task(shared = [flash, mcuboot])]
+    #[task(shared = [external_flash, internal_flash, mcuboot])]
     fn self_test(ctx: self_test::Context) {
         crate::pinetimers::tasks_impl::self_test(ctx)
     }

@@ -4,6 +4,8 @@ mod footer;
 use header::MCUBootHeader;
 use footer::MCUBootFooter;
 
+use crate::drivers::flash::InternalFlash;
+
 #[derive(Debug)]
 pub struct MCUBoot {
     pub header: MCUBootHeader,
@@ -11,18 +13,15 @@ pub struct MCUBoot {
 }
 
 impl MCUBoot {
-    pub fn get() -> Self {
+    pub fn get(internal_flash: &mut InternalFlash) -> Self {
         MCUBoot {
-            header: MCUBootHeader::get(),
-            footer: MCUBootFooter::get(),
+            header: MCUBootHeader::get(internal_flash),
+            footer: MCUBootFooter::get(internal_flash),
         }
     }
 
-    pub unsafe fn mark_valid(&mut self) {
-        self.footer.mark_valid();
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.footer.is_valid()
+    pub fn mark_valid(&mut self, internal_flash: &mut InternalFlash) {
+        self.footer.is_valid = true;
+        self.footer.write(internal_flash);
     }
 }
