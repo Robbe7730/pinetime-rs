@@ -14,6 +14,7 @@ mod ble_update;
 mod set_time;
 mod pet_watchdog;
 mod validate;
+mod reboot;
 
 pub use init::init;
 pub use idle::idle;
@@ -31,3 +32,4 @@ pub use ble_update::ble_update;
 pub use set_time::set_time;
 pub use pet_watchdog::pet_watchdog;
 pub use validate::validate;
+pub use reboot::reboot;

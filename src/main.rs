@@ -70,7 +70,6 @@ mod tasks {
             Shared {
                 gpiote: init_shared.gpiote,
                 watchdog_handles: init_shared.watchdog_handles,
-                mcuboot: init_shared.mcuboot,
 
                 display: init_shared.display,
                 touchpanel: init_shared.touchpanel,
@@ -78,6 +77,7 @@ mod tasks {
                 bluetooth: init_shared.bluetooth,
                 battery: init_shared.battery,
                 clock: init_shared.clock,
+                mcuboot: init_shared.mcuboot,
 
                 current_screen: init_shared.current_screen,
             }
@@ -177,6 +177,11 @@ mod tasks {
     #[task(shared = [mcuboot])]
     fn validate(ctx: validate::Context) {
         crate::pinetimers::tasks_impl::validate(ctx);
+    }
+
+    #[task]
+    fn reboot(ctx: reboot::Context) {
+        crate::pinetimers::tasks_impl::reboot(ctx);
     }
 }
 
