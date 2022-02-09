@@ -1,5 +1,6 @@
 use rubble::att::{AttributeProvider, HandleRange, Attribute, Handle, AttUuid, AttributeAccessPermissions};
-use rubble::uuid::Uuid16;
+use rubble::uuid::{Uuid16, Uuid128};
+use rubble::bytes::{ByteWriter, ToBytes};
 use rubble::Error;
 
 use crate::drivers::battery::{Battery, BatteryState};
@@ -18,6 +19,7 @@ use core::ops::BitOr;
 pub enum ServiceUUID {
     Battery,
     CurrentTime,
+    GenericAccess,
 }
 
 impl ServiceUUID {
@@ -25,6 +27,7 @@ impl ServiceUUID {
         match self {
             ServiceUUID::Battery => vec![0x0F, 0x18],
             ServiceUUID::CurrentTime => vec![0x05, 0x18],
+            ServiceUUID::GenericAccess => vec![0x18, 0x00],
         }
     }
 }
@@ -33,13 +36,15 @@ impl ServiceUUID {
 pub enum CharacteristicUUID {
     BatteryLevel,
     DateTime,
+    Control,
 }
 
-impl From<&CharacteristicUUID> for u16 {
-    fn from(uuid: &CharacteristicUUID) -> u16 {
+impl From<&CharacteristicUUID> for AttUuid {
+    fn from(uuid: &CharacteristicUUID) -> AttUuid {
         match uuid {
-            CharacteristicUUID::BatteryLevel => 0x2a19,
-            CharacteristicUUID::DateTime => 0x2a08,
+            CharacteristicUUID::BatteryLevel => Uuid16(0x2a19).into(),
+            CharacteristicUUID::DateTime => Uuid16(0x2a08).into(),
+            CharacteristicUUID::Control => Uuid128::parse_static("8dac2cb7-6b95-40d1-bab6-27fba8f752f3").into(),
         }
     }
 }
@@ -115,7 +120,7 @@ impl From<&BluetoothAttribute> for AttUuid {
             BluetoothAttribute::PrimaryService(_) => Uuid16(0x2800).into(),
             BluetoothAttribute::SecondaryService(_) => Uuid16(0x2801).into(),
             BluetoothAttribute::Characteristic(_, _) => Uuid16(0x2803).into(),
-            BluetoothAttribute::CharacteristicValue(uuid, _) => Uuid16(uuid.into()).into(),
+            BluetoothAttribute::CharacteristicValue(uuid, _) => uuid.into(),
         }
     }
 }
@@ -127,14 +132,13 @@ impl BluetoothAttribute {
             BluetoothAttribute::SecondaryService(uuid) => uuid.data(),
             BluetoothAttribute::Characteristic(prop, uuid) => {
                 let next_handle: u16 = handle + 1;
-                let uuid_value: u16 = uuid.into();
-                vec![
-                    prop.into(),
-                    (next_handle & 0xff) as u8,
-                    ((next_handle >> 8) & 0xff) as u8,
-                    (uuid_value & 0xff) as u8,
-                    ((uuid_value >> 8) & 0xff) as u8,
-                ]
+                let mut bytebuffer = [0; 19];
+                let mut bytewriter = ByteWriter::new(&mut bytebuffer);
+                bytewriter.write_u8(prop.into()).unwrap();
+                bytewriter.write_u16_le(next_handle).unwrap();
+                AttUuid::from(uuid).to_bytes(&mut bytewriter).unwrap();
+
+                bytebuffer.to_vec()
             }
             BluetoothAttribute::CharacteristicValue(_, value) => value.clone(),
         }
@@ -176,6 +180,15 @@ impl BluetoothAttributeProvider {
             BluetoothAttribute::CharacteristicValue(
                 CharacteristicUUID::DateTime,
                 vec![0, 0, 0, 0, 0, 0, 0]
+            ),
+            BluetoothAttribute::PrimaryService(ServiceUUID::GenericAccess),
+            BluetoothAttribute::Characteristic(
+                CharacteristicProperty::Write | CharacteristicProperty::Notify,
+                CharacteristicUUID::Control
+            ),
+            BluetoothAttribute::CharacteristicValue(
+                CharacteristicUUID::Control,
+                vec![0]
             ),
         ];
         let rubble_attributes = Self::rubble_attributes(&attributes);
@@ -224,7 +237,12 @@ impl BluetoothAttributeProvider {
                                     (clock.datetime.minute() & 0xff).try_into().unwrap(),
                                     (clock.datetime.second() & 0xff).try_into().unwrap(),
                                 ]
-                            )
+                            ),
+                        CharacteristicUUID::Control => 
+                            BluetoothAttribute::CharacteristicValue(
+                                CharacteristicUUID::Control,
+                                vec![0]
+                            ),
                     };
                 },
                 _ => {}
