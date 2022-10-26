@@ -45,3 +45,8 @@ Pronounced Pine-Timers, my operating system for the [PineTime](https://wiki.pine
 
 0. SPIM
 1. TWIM
+
+## Setup
+
+To build and flash, simply run `make`. To get the RTT output, use `telnet
+localhost 6969`

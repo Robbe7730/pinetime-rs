@@ -3,6 +3,7 @@ mod attribute_provider;
 
 use config::BluetoothConfig;
 use attribute_provider::BluetoothAttributeProvider;
+use rtt_target::rprintln;
 
 use crate::pinetimers::BluetoothTimer;
 use crate::drivers::battery::Battery;
@@ -18,7 +19,7 @@ use rubble_nrf5x::timer::BleTimer;
 use rubble::link::queue::{SimpleQueue, PacketQueue};
 use rubble::link::{LinkLayer, Responder, Cmd};
 use rubble::l2cap::{L2CAPState, BleChannelMap};
-use rubble::link::ad_structure::AdStructure;
+use rubble::link::ad_structure::{AdStructure, Flags};
 use rubble::time::Timer;
 
 pub struct Bluetooth {
@@ -40,7 +41,9 @@ impl Bluetooth {
         ble_rx_queue: &'static mut SimpleQueue,
     ) -> Bluetooth {
         let device_address = get_device_address();
-        
+
+        rprintln!("{:#?}", device_address);
+
         let mut ble_radio = BleRadio::new(
             radio,
             &ficr,
@@ -64,8 +67,13 @@ impl Bluetooth {
 
         let next_update = ble_ll
             .start_advertise(
-                rubble::time::Duration::from_millis(200),
-                &[AdStructure::CompleteLocalName("pinetime-rs")],
+                rubble::time::Duration::from_millis(100),
+                &[
+                    AdStructure::CompleteLocalName("PineTime-rs"),
+                    AdStructure::Flags(
+                        Flags::from_bits(0b00000111).unwrap()
+                    ),
+                ],
                 &mut ble_radio,
                 tx_cons,
                 rx_prod,

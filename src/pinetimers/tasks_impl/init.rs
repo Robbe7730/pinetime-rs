@@ -197,8 +197,6 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
         // Set up the UI
         let screen = Box::new(ScreenMain::new());
 
-        // self_test::spawn().unwrap();
-
         crate::tasks::pet_watchdog::spawn().unwrap();
         crate::tasks::validate::spawn().unwrap();
 
