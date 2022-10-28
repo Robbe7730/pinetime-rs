@@ -36,16 +36,24 @@ impl ServiceUUID {
 pub enum CharacteristicUUID {
     BatteryLevel,
     DateTime,
+    CurrentTime,
     Control,
+}
+
+impl From<&CharacteristicUUID> for Uuid128 {
+    fn from(uuid: &CharacteristicUUID) -> Uuid128 {
+        match uuid {
+            CharacteristicUUID::BatteryLevel => Uuid16(0x2a19).into(),
+            CharacteristicUUID::DateTime => Uuid16(0x2a08).into(),
+            CharacteristicUUID::CurrentTime => Uuid16(0x2a2b).into(),
+            CharacteristicUUID::Control => Uuid128::parse_static("8dac2cb7-6b95-40d1-bab6-27fba8f752f3"),
+        }
+    }
 }
 
 impl From<&CharacteristicUUID> for AttUuid {
     fn from(uuid: &CharacteristicUUID) -> AttUuid {
-        match uuid {
-            CharacteristicUUID::BatteryLevel => Uuid16(0x2a19).into(),
-            CharacteristicUUID::DateTime => Uuid16(0x2a08).into(),
-            CharacteristicUUID::Control => Uuid128::parse_static("8dac2cb7-6b95-40d1-bab6-27fba8f752f3").into(),
-        }
+        return Uuid128::from(uuid).into();
     }
 }
 
@@ -131,14 +139,23 @@ impl BluetoothAttribute {
             BluetoothAttribute::PrimaryService(uuid) => uuid.data(),
             BluetoothAttribute::SecondaryService(uuid) => uuid.data(),
             BluetoothAttribute::Characteristic(prop, uuid) => {
+                let properties: u8 = prop.into();
                 let next_handle: u16 = handle + 1;
-                let mut bytebuffer = [0; 19];
-                let mut bytewriter = ByteWriter::new(&mut bytebuffer);
-                bytewriter.write_u8(prop.into()).unwrap();
-                bytewriter.write_u16_le(next_handle).unwrap();
-                AttUuid::from(uuid).to_bytes(&mut bytewriter).unwrap();
 
-                bytebuffer.to_vec()
+                let mut uuid_buffer = [0; 16];
+                let mut uuidwriter = ByteWriter::new(&mut uuid_buffer);
+                Uuid128::from(uuid).to_bytes(&mut uuidwriter).unwrap();
+                uuid_buffer.reverse();
+
+                let mut bytebuffer = vec![
+                    properties,
+                    (next_handle & 0xff) as u8,
+                    ((next_handle >> 8) & 0xff) as u8,
+                ];
+
+                bytebuffer.extend_from_slice(&uuid_buffer);
+
+                return bytebuffer;
             }
             BluetoothAttribute::CharacteristicValue(_, value) => value.clone(),
         }
@@ -180,6 +197,14 @@ impl BluetoothAttributeProvider {
             BluetoothAttribute::CharacteristicValue(
                 CharacteristicUUID::DateTime,
                 vec![0, 0, 0, 0, 0, 0, 0]
+            ),
+            BluetoothAttribute::Characteristic(
+                CharacteristicProperty::Read | CharacteristicProperty::Write,
+                CharacteristicUUID::CurrentTime
+            ),
+            BluetoothAttribute::CharacteristicValue(
+                CharacteristicUUID::CurrentTime,
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0]
             ),
             BluetoothAttribute::PrimaryService(ServiceUUID::GenericAccess),
             BluetoothAttribute::Characteristic(
@@ -236,6 +261,21 @@ impl BluetoothAttributeProvider {
                                     (clock.datetime.hour() & 0xff).try_into().unwrap(),
                                     (clock.datetime.minute() & 0xff).try_into().unwrap(),
                                     (clock.datetime.second() & 0xff).try_into().unwrap(),
+                                ]
+                            ),
+                        CharacteristicUUID::CurrentTime =>
+                            BluetoothAttribute::CharacteristicValue(
+                                CharacteristicUUID::CurrentTime,
+                                vec![
+                                    (clock.datetime.year() & 0xff).try_into().unwrap(),
+                                    ((clock.datetime.year() >> 8) & 0xff).try_into().unwrap(),
+                                    (clock.datetime.month() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.day() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.hour() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.minute() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.second() & 0xff).try_into().unwrap(),
+                                    0, // TODO: Day of week
+                                    0, // TODO: Fractions of a second
                                 ]
                             ),
                         CharacteristicUUID::Control => 
@@ -347,6 +387,28 @@ impl AttributeProvider for BluetoothAttributeProvider {
                 if data.len() == 7 {
                     self.attributes[i] = BluetoothAttribute::CharacteristicValue(
                         CharacteristicUUID::DateTime,
+                        data.to_vec()
+                    );
+                    crate::tasks::set_time::spawn(
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd(
+                                i32::from(data[1]) << 8 | i32::from(data[0]),
+                                u32::from(data[2]),
+                                u32::from(data[3])
+                            ),
+                            NaiveTime::from_hms(
+                                u32::from(data[4]),
+                                u32::from(data[5]),
+                                u32::from(data[6])
+                            )
+                        )
+                    ).unwrap();
+                }
+            }
+            BluetoothAttribute::CharacteristicValue(CharacteristicUUID::CurrentTime, _) => {
+                if data.len() == 10 {
+                    self.attributes[i] = BluetoothAttribute::CharacteristicValue(
+                        CharacteristicUUID::CurrentTime,
                         data.to_vec()
                     );
                     crate::tasks::set_time::spawn(
