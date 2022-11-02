@@ -161,7 +161,7 @@ mod tasks {
         crate::pinetimers::tasks_impl::ble_timer(ctx)
     }
 
-    #[task(shared = [bluetooth, battery, clock])]
+    #[task(shared = [bluetooth, battery, clock, mcuboot])]
     fn ble_update(ctx: ble_update::Context) {
         crate::pinetimers::tasks_impl::ble_update(ctx)
     }

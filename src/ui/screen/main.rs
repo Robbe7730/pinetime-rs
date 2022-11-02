@@ -23,7 +23,6 @@ use chrono::Timelike;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::vec;
-use alloc::format;
 
 #[derive(Debug)]
 pub struct ScreenMain<COLOR> {
@@ -97,13 +96,7 @@ where
             .unwrap();
 
         let text_style = MonoTextStyle::new(&FONT_10X20, COLOR::WHITE);
-        Text::with_baseline(&format!(
-                "v{}.{}.{} ({})",
-                mcuboot.header.version.major,
-                mcuboot.header.version.minor,
-                mcuboot.header.version.revision,
-                mcuboot.header.version.build_num,
-            ), Point::new(0, 0), text_style, Baseline::Top)
+        Text::with_baseline(&mcuboot.version_string(), Point::new(0, 0), text_style, Baseline::Top)
             .draw(display)
             .unwrap();
     }

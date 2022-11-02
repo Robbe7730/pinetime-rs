@@ -6,6 +6,7 @@ use rubble::Error;
 use crate::drivers::battery::{Battery, BatteryState};
 use crate::drivers::clock::Clock;
 
+use crate::drivers::mcuboot::MCUBoot;
 use crate::pinetimers::ConnectedRtc;
 
 use chrono::{Datelike, Timelike, NaiveDateTime, NaiveDate, NaiveTime};
@@ -20,6 +21,7 @@ pub enum ServiceUUID {
     Battery,
     CurrentTime,
     GenericAccess,
+    DeviceInformation,
 }
 
 impl ServiceUUID {
@@ -27,7 +29,8 @@ impl ServiceUUID {
         match self {
             ServiceUUID::Battery => vec![0x0F, 0x18],
             ServiceUUID::CurrentTime => vec![0x05, 0x18],
-            ServiceUUID::GenericAccess => vec![0x18, 0x00],
+            ServiceUUID::GenericAccess => vec![0x00, 0x18],
+            ServiceUUID::DeviceInformation => vec![0x0A, 0x18],
         }
     }
 }
@@ -37,7 +40,7 @@ pub enum CharacteristicUUID {
     BatteryLevel,
     DateTime,
     CurrentTime,
-    Control,
+    FirmwareRevisionString,
 }
 
 impl From<&CharacteristicUUID> for Uuid128 {
@@ -46,7 +49,7 @@ impl From<&CharacteristicUUID> for Uuid128 {
             CharacteristicUUID::BatteryLevel => Uuid16(0x2a19).into(),
             CharacteristicUUID::DateTime => Uuid16(0x2a08).into(),
             CharacteristicUUID::CurrentTime => Uuid16(0x2a2b).into(),
-            CharacteristicUUID::Control => Uuid128::parse_static("8dac2cb7-6b95-40d1-bab6-27fba8f752f3"),
+            CharacteristicUUID::FirmwareRevisionString => Uuid16(0x2a26).into(),
         }
     }
 }
@@ -206,14 +209,14 @@ impl BluetoothAttributeProvider {
                 CharacteristicUUID::CurrentTime,
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0]
             ),
-            BluetoothAttribute::PrimaryService(ServiceUUID::GenericAccess),
+            BluetoothAttribute::PrimaryService(ServiceUUID::DeviceInformation),
             BluetoothAttribute::Characteristic(
-                CharacteristicProperty::Write | CharacteristicProperty::Notify,
-                CharacteristicUUID::Control
+                CharacteristicProperty::Read,
+                CharacteristicUUID::FirmwareRevisionString
             ),
             BluetoothAttribute::CharacteristicValue(
-                CharacteristicUUID::Control,
-                vec![0]
+                CharacteristicUUID::FirmwareRevisionString,
+                "unknown".as_bytes().to_vec()
             ),
         ];
         let rubble_attributes = Self::rubble_attributes(&attributes);
@@ -234,7 +237,12 @@ impl BluetoothAttributeProvider {
         self.rubble_attributes = Self::rubble_attributes(&self.attributes);
     }
 
-    pub fn update_data(&mut self, battery: &mut Battery, clock: &Clock<ConnectedRtc>) {
+    pub fn update_data(
+        &mut self,
+        battery: &mut Battery,
+        clock: &Clock<ConnectedRtc>,
+        mcuboot: &MCUBoot
+    ) {
         let percentage = match battery.get_state() {
             BatteryState::Charging(x) => x,
             BatteryState::Discharging(x) => x,
@@ -276,12 +284,13 @@ impl BluetoothAttributeProvider {
                                     (clock.datetime.second() & 0xff).try_into().unwrap(),
                                     0, // TODO: Day of week
                                     0, // TODO: Fractions of a second
+                                    0, // TODO: Reason for update
                                 ]
                             ),
-                        CharacteristicUUID::Control => 
+                        CharacteristicUUID::FirmwareRevisionString =>
                             BluetoothAttribute::CharacteristicValue(
-                                CharacteristicUUID::Control,
-                                vec![0]
+                                CharacteristicUUID::FirmwareRevisionString,
+                                mcuboot.version_string().as_bytes().to_vec()
                             ),
                     };
                 },
