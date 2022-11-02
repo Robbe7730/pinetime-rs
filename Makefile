@@ -1,3 +1,5 @@
+VERSION := $(shell cat Cargo.toml | grep "^version = " | head -n 1 | sed 's/^version = "\(.*\)".*/\1/g')
+
 flash_release: build
 	# Create the bin file
 	arm-none-eabi-objcopy \
@@ -10,7 +12,7 @@ flash_release: build
 	# Create the image
 	imgtool create \
 		--align 4 \
-		--version 0.0.2 \
+		--version $(VERSION) \
 		--header-size 32 \
 		--slot-size 475136 \
 		--pad-header \

@@ -22,6 +22,8 @@ use rubble::l2cap::{L2CAPState, BleChannelMap};
 use rubble::link::ad_structure::{AdStructure, Flags};
 use rubble::time::Timer;
 
+use super::mcuboot::MCUBoot;
+
 pub struct Bluetooth {
     linklayer: LinkLayer<BluetoothConfig>,
     radio: BleRadio,
@@ -88,11 +90,16 @@ impl Bluetooth {
         }
     }
 
-    pub fn update_data(&mut self, battery: &mut Battery, clock: &Clock<ConnectedRtc>) {
+    pub fn update_data(
+        &mut self,
+        battery: &mut Battery,
+        clock: &Clock<ConnectedRtc>,
+        mcuboot: &MCUBoot,
+    ) {
         self.responder.l2cap()
             .channel_mapper()
             .attribute_provider()
-            .update_data(battery, clock);
+            .update_data(battery, clock, mcuboot);
     }
 
     fn handle_cmd(&mut self, cmd: Cmd) {

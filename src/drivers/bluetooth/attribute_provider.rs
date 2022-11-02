@@ -6,6 +6,7 @@ use rubble::Error;
 use crate::drivers::battery::{Battery, BatteryState};
 use crate::drivers::clock::Clock;
 
+use crate::drivers::mcuboot::MCUBoot;
 use crate::pinetimers::ConnectedRtc;
 
 use chrono::{Datelike, Timelike, NaiveDateTime, NaiveDate, NaiveTime};
@@ -20,6 +21,7 @@ pub enum ServiceUUID {
     Battery,
     CurrentTime,
     GenericAccess,
+    DeviceInformation,
 }
 
 impl ServiceUUID {
@@ -27,7 +29,8 @@ impl ServiceUUID {
         match self {
             ServiceUUID::Battery => vec![0x0F, 0x18],
             ServiceUUID::CurrentTime => vec![0x05, 0x18],
-            ServiceUUID::GenericAccess => vec![0x18, 0x00],
+            ServiceUUID::GenericAccess => vec![0x00, 0x18],
+            ServiceUUID::DeviceInformation => vec![0x0A, 0x18],
         }
     }
 }
@@ -36,16 +39,24 @@ impl ServiceUUID {
 pub enum CharacteristicUUID {
     BatteryLevel,
     DateTime,
-    Control,
+    CurrentTime,
+    FirmwareRevisionString,
+}
+
+impl From<&CharacteristicUUID> for Uuid128 {
+    fn from(uuid: &CharacteristicUUID) -> Uuid128 {
+        match uuid {
+            CharacteristicUUID::BatteryLevel => Uuid16(0x2a19).into(),
+            CharacteristicUUID::DateTime => Uuid16(0x2a08).into(),
+            CharacteristicUUID::CurrentTime => Uuid16(0x2a2b).into(),
+            CharacteristicUUID::FirmwareRevisionString => Uuid16(0x2a26).into(),
+        }
+    }
 }
 
 impl From<&CharacteristicUUID> for AttUuid {
     fn from(uuid: &CharacteristicUUID) -> AttUuid {
-        match uuid {
-            CharacteristicUUID::BatteryLevel => Uuid16(0x2a19).into(),
-            CharacteristicUUID::DateTime => Uuid16(0x2a08).into(),
-            CharacteristicUUID::Control => Uuid128::parse_static("8dac2cb7-6b95-40d1-bab6-27fba8f752f3").into(),
-        }
+        return Uuid128::from(uuid).into();
     }
 }
 
@@ -131,14 +142,23 @@ impl BluetoothAttribute {
             BluetoothAttribute::PrimaryService(uuid) => uuid.data(),
             BluetoothAttribute::SecondaryService(uuid) => uuid.data(),
             BluetoothAttribute::Characteristic(prop, uuid) => {
+                let properties: u8 = prop.into();
                 let next_handle: u16 = handle + 1;
-                let mut bytebuffer = [0; 19];
-                let mut bytewriter = ByteWriter::new(&mut bytebuffer);
-                bytewriter.write_u8(prop.into()).unwrap();
-                bytewriter.write_u16_le(next_handle).unwrap();
-                AttUuid::from(uuid).to_bytes(&mut bytewriter).unwrap();
 
-                bytebuffer.to_vec()
+                let mut uuid_buffer = [0; 16];
+                let mut uuidwriter = ByteWriter::new(&mut uuid_buffer);
+                Uuid128::from(uuid).to_bytes(&mut uuidwriter).unwrap();
+                uuid_buffer.reverse();
+
+                let mut bytebuffer = vec![
+                    properties,
+                    (next_handle & 0xff) as u8,
+                    ((next_handle >> 8) & 0xff) as u8,
+                ];
+
+                bytebuffer.extend_from_slice(&uuid_buffer);
+
+                return bytebuffer;
             }
             BluetoothAttribute::CharacteristicValue(_, value) => value.clone(),
         }
@@ -181,14 +201,22 @@ impl BluetoothAttributeProvider {
                 CharacteristicUUID::DateTime,
                 vec![0, 0, 0, 0, 0, 0, 0]
             ),
-            BluetoothAttribute::PrimaryService(ServiceUUID::GenericAccess),
             BluetoothAttribute::Characteristic(
-                CharacteristicProperty::Write | CharacteristicProperty::Notify,
-                CharacteristicUUID::Control
+                CharacteristicProperty::Read | CharacteristicProperty::Write,
+                CharacteristicUUID::CurrentTime
             ),
             BluetoothAttribute::CharacteristicValue(
-                CharacteristicUUID::Control,
-                vec![0]
+                CharacteristicUUID::CurrentTime,
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0]
+            ),
+            BluetoothAttribute::PrimaryService(ServiceUUID::DeviceInformation),
+            BluetoothAttribute::Characteristic(
+                CharacteristicProperty::Read,
+                CharacteristicUUID::FirmwareRevisionString
+            ),
+            BluetoothAttribute::CharacteristicValue(
+                CharacteristicUUID::FirmwareRevisionString,
+                "unknown".as_bytes().to_vec()
             ),
         ];
         let rubble_attributes = Self::rubble_attributes(&attributes);
@@ -209,7 +237,12 @@ impl BluetoothAttributeProvider {
         self.rubble_attributes = Self::rubble_attributes(&self.attributes);
     }
 
-    pub fn update_data(&mut self, battery: &mut Battery, clock: &Clock<ConnectedRtc>) {
+    pub fn update_data(
+        &mut self,
+        battery: &mut Battery,
+        clock: &Clock<ConnectedRtc>,
+        mcuboot: &MCUBoot
+    ) {
         let percentage = match battery.get_state() {
             BatteryState::Charging(x) => x,
             BatteryState::Discharging(x) => x,
@@ -238,10 +271,26 @@ impl BluetoothAttributeProvider {
                                     (clock.datetime.second() & 0xff).try_into().unwrap(),
                                 ]
                             ),
-                        CharacteristicUUID::Control => 
+                        CharacteristicUUID::CurrentTime =>
                             BluetoothAttribute::CharacteristicValue(
-                                CharacteristicUUID::Control,
-                                vec![0]
+                                CharacteristicUUID::CurrentTime,
+                                vec![
+                                    (clock.datetime.year() & 0xff).try_into().unwrap(),
+                                    ((clock.datetime.year() >> 8) & 0xff).try_into().unwrap(),
+                                    (clock.datetime.month() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.day() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.hour() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.minute() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.second() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.weekday().number_from_monday() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.nanosecond() / (1_000_000_000 / 256) & 0xff).try_into().unwrap(),
+                                    0,
+                                ]
+                            ),
+                        CharacteristicUUID::FirmwareRevisionString =>
+                            BluetoothAttribute::CharacteristicValue(
+                                CharacteristicUUID::FirmwareRevisionString,
+                                mcuboot.version_string().as_bytes().to_vec()
                             ),
                     };
                 },
@@ -347,6 +396,28 @@ impl AttributeProvider for BluetoothAttributeProvider {
                 if data.len() == 7 {
                     self.attributes[i] = BluetoothAttribute::CharacteristicValue(
                         CharacteristicUUID::DateTime,
+                        data.to_vec()
+                    );
+                    crate::tasks::set_time::spawn(
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd(
+                                i32::from(data[1]) << 8 | i32::from(data[0]),
+                                u32::from(data[2]),
+                                u32::from(data[3])
+                            ),
+                            NaiveTime::from_hms(
+                                u32::from(data[4]),
+                                u32::from(data[5]),
+                                u32::from(data[6])
+                            )
+                        )
+                    ).unwrap();
+                }
+            }
+            BluetoothAttribute::CharacteristicValue(CharacteristicUUID::CurrentTime, _) => {
+                if data.len() == 10 {
+                    self.attributes[i] = BluetoothAttribute::CharacteristicValue(
+                        CharacteristicUUID::CurrentTime,
                         data.to_vec()
                     );
                     crate::tasks::set_time::spawn(
