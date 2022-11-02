@@ -45,7 +45,7 @@ pub struct Shared {
 
 pub struct Local {}
 
-pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::init::Monotonics) {
+pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::init::Monotonics) {
         rtt_init_print!();
         rprintln!("Pijn tijd");
 
@@ -172,8 +172,7 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
 
         // Enable LFCLK
         Clocks::new(ctx.device.CLOCK)
-            .start_lfclk()
-            .enable_ext_hfosc(); // Bluetooth needs this
+            .start_lfclk();
 
         // Set up RTC
         // Prescaler value for 8Hz (125ms period)
@@ -182,16 +181,10 @@ pub fn init(mut ctx: crate::tasks::init::Context) -> (Shared, Local, crate::task
         let clock = Clock::new(rtc);
 
         // Set up Bluetooth
-        ctx.core.DCB.enable_trace();
-        ctx.core.DWT.enable_cycle_counter();
         let bluetooth = Bluetooth::new(
             ctx.device.RADIO,
             ctx.device.FICR,
-            ctx.device.TIMER2,
-            ctx.local.ble_tx_buf,
-            ctx.local.ble_rx_buf,
-            ctx.local.ble_tx_queue,
-            ctx.local.ble_rx_queue,
+            ctx.local.ble_packet_buffer
         );
 
         // Set up the UI

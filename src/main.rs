@@ -31,10 +31,6 @@ mod tasks {
     use nrf52832_hal::wdt::WatchdogHandle;
     use nrf52832_hal::wdt::handles::HdlN;
 
-    use rubble::link::MIN_PDU_BUF;
-    use rubble_nrf5x::radio::PacketBuffer;
-    use rubble::link::queue::SimpleQueue;
-
     use chrono::NaiveDateTime;
 
     use alloc::boxed::Box;
@@ -95,10 +91,7 @@ mod tasks {
     // Allocate here to make them 'static
     #[init(local = [
             spi_lock: Mutex<Option<Spim<crate::pinetimers::ConnectedSpim>>> = Mutex::new(None),
-            ble_tx_buf: PacketBuffer = [0; MIN_PDU_BUF],
-            ble_rx_buf: PacketBuffer = [0; MIN_PDU_BUF],
-            ble_tx_queue: SimpleQueue = SimpleQueue::new(),
-            ble_rx_queue: SimpleQueue = SimpleQueue::new(),
+            ble_packet_buffer: [u8; 258] = [0; 258],
     ])]
     fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         let (shared, local, mono) = crate::pinetimers::tasks_impl::init(ctx);
@@ -126,7 +119,7 @@ mod tasks {
         crate::pinetimers::tasks_impl::periodic_update_device_state(ctx)
     }
 
-    #[task(shared = [display, current_screen, clock, mcuboot])]
+    #[task(shared = [display, current_screen, clock, mcuboot, battery])]
     fn redraw_screen(ctx: redraw_screen::Context) {
         crate::pinetimers::tasks_impl::redraw_screen(ctx)
     }
@@ -147,23 +140,8 @@ mod tasks {
     }
 
     #[task(binds = RADIO, shared = [bluetooth], priority = 3)]
-    fn ble_radio(ctx: ble_radio::Context) {
-        crate::pinetimers::tasks_impl::ble_radio(ctx)
-    }
-
-    #[task(shared = [bluetooth], priority = 2)]
-    fn ble_worker(ctx: ble_worker::Context) {
-        crate::pinetimers::tasks_impl::ble_worker(ctx)
-    }
-
-    #[task(binds = TIMER2, shared = [bluetooth], priority = 3)]
-    fn ble_timer(ctx: ble_timer::Context) {
-        crate::pinetimers::tasks_impl::ble_timer(ctx)
-    }
-
-    #[task(shared = [bluetooth, battery, clock, mcuboot])]
-    fn ble_update(ctx: ble_update::Context) {
-        crate::pinetimers::tasks_impl::ble_update(ctx)
+    fn ble_radio_interrupt(ctx: ble_radio_interrupt::Context) {
+        crate::pinetimers::tasks_impl::ble_radio_interrupt(ctx)
     }
 
     #[task(shared = [clock])]

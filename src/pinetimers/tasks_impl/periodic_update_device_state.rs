@@ -9,6 +9,5 @@ pub fn periodic_update_device_state(mut ctx: crate::tasks::periodic_update_devic
         clock.tick();
     });
 
-    crate::tasks::ble_update::spawn().unwrap();
     crate::tasks::redraw_screen::spawn().unwrap();
 }
