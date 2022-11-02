@@ -282,9 +282,9 @@ impl BluetoothAttributeProvider {
                                     (clock.datetime.hour() & 0xff).try_into().unwrap(),
                                     (clock.datetime.minute() & 0xff).try_into().unwrap(),
                                     (clock.datetime.second() & 0xff).try_into().unwrap(),
-                                    0, // TODO: Day of week
-                                    0, // TODO: Fractions of a second
-                                    0, // TODO: Reason for update
+                                    (clock.datetime.weekday().number_from_monday() & 0xff).try_into().unwrap(),
+                                    (clock.datetime.nanosecond() / (1_000_000_000 / 256) & 0xff).try_into().unwrap(),
+                                    0,
                                 ]
                             ),
                         CharacteristicUUID::FirmwareRevisionString =>
