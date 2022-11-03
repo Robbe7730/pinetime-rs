@@ -1,6 +1,67 @@
 use alloc::fmt::Debug;
 
+use alloc::string::String;
 use alloc::vec::Vec;
+
+// https://web.archive.org/web/20200722194743/https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/
+// or https://web.archive.org/web/20210726153139/https://btprodspecificationrefs.blob.core.windows.net/assigned-numbers/Assigned%20Number%20Types/Generic%20Access%20Profile.pdf
+// The original no longer exists >:(
+#[derive(Debug)]
+pub enum AdvData {
+    Flags(u8),
+    ShortenedLocalName(String),
+    CompleteLocalName(String),
+    TxPowerLevel(i8),
+
+    Unknown(Vec<u8>)
+}
+
+impl AdvData {
+    fn data_from_pdu(data: &[u8]) -> Vec<AdvData> {
+        let mut i = 0;
+
+        let mut ret = Vec::new();
+
+        while i < data.len() {
+            let len: usize = data[i].into();
+            i += 1;
+
+            if len == 0 {
+                break
+            }
+
+            if (i + len) > data.len() {
+                ret.push(
+                    AdvData::Unknown(Vec::from(&data[i..]))
+                )
+            } else {
+                ret.push(
+                    AdvData::from(&data[i..i+len])
+                )
+            }
+
+            i += len;
+        }
+
+        ret
+    }
+}
+
+impl From<&[u8]> for AdvData {
+    fn from(data: &[u8]) -> Self {
+        match data[0] {
+            1 => AdvData::Flags(data[1]),
+            8 => AdvData::ShortenedLocalName(
+                String::from_utf8_lossy(&data[1..]).into()
+            ),
+            9 => AdvData::CompleteLocalName(
+                String::from_utf8_lossy(&data[1..]).into()
+            ),
+            10 => AdvData::TxPowerLevel(data[1] as i8),
+            _ => AdvData::Unknown(Vec::from(data))
+        }
+    }
+}
 
 pub enum BluetoothAddress {
     Random([u8; 6]),
@@ -44,13 +105,13 @@ impl BluetoothAddress {
 #[derive(Debug)]
 pub enum BluetoothPacket {
     // PRIMARY ADVERTISING
-    AdvInd(BluetoothAddress, ()), // AdvA, AdvData (TODO)
+    AdvInd(BluetoothAddress, Vec<AdvData>), // AdvA, AdvData
     AdvDirectInd(BluetoothAddress, BluetoothAddress), // AdvA,TargetA
-    AdvNonconnInd(BluetoothAddress, ()), // AdvA, AdvData (TODO)
+    AdvNonconnInd(BluetoothAddress, Vec<AdvData>), // AdvA, AdvData
     ScanReq(BluetoothAddress, BluetoothAddress), // ScanA, AdvA
     ScanRsp(BluetoothAddress, ()), // AdvA, ScanRspData (TODO)
     ConnectInd(BluetoothAddress, BluetoothAddress, [u8; 22]), // InitA, AdvA, LLData
-    AdvScanInd(BluetoothAddress, ()), // AdvA, AdvData (TODO)
+    AdvScanInd(BluetoothAddress, Vec<AdvData>), // AdvA, AdvData
     AdvExtInd(()), // TODO
 
     Unkown(u8, Vec<u8>),
@@ -59,7 +120,6 @@ pub enum BluetoothPacket {
 impl BluetoothPacket {
     pub fn from_advertising_primary(data: &[u8]) -> Result<Self, ()> {
         let pdu_type = data[0] & 0x0f;
-        let _rfu = (data[0] & 0b00010000) != 0;
         let _chsel = (data[0] & 0b00100000) != 0;
         let txadd = (data[0] & 0b01000000) != 0;
         let rxadd = (data[0] & 0b10000000) != 0;
@@ -70,7 +130,7 @@ impl BluetoothPacket {
         Ok(match pdu_type {
             0b0000 => Self::AdvInd(
                 BluetoothAddress::new(&pdu[0..6], txadd)?,
-                ()
+                AdvData::data_from_pdu(&pdu[6..])
             ),
             0b0001 => Self::AdvDirectInd(
                 BluetoothAddress::new(&pdu[0..6], txadd)?,
@@ -78,7 +138,7 @@ impl BluetoothPacket {
             ),
             0b0010 => Self::AdvNonconnInd(
                 BluetoothAddress::new(&pdu[0..6], txadd)?,
-                ()
+                AdvData::data_from_pdu(&pdu[6..])
             ),
             0b0011 => Self::ScanReq(
                 BluetoothAddress::new(&pdu[0..6], txadd)?,
@@ -95,7 +155,7 @@ impl BluetoothPacket {
             ),
             0b0110 => Self::AdvScanInd(
                 BluetoothAddress::new(&pdu[0..6], txadd)?,
-                ()
+                AdvData::data_from_pdu(&pdu[6..])
             ),
             0b0111 => Self::AdvExtInd(()),
             x => BluetoothPacket::Unkown(x, Vec::from(pdu))
