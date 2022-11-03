@@ -150,12 +150,6 @@ impl PhyRadio {
             )
         }
 
-        // Set shortcuts READY -> START and END -> DISABLE
-        ret.radio.shorts.write(|w| w
-            .ready_start().bit(true)
-            .end_disable().bit(true)
-        );
-
         // Set packet pointer
         unsafe {
             let packetptr = ret.packet_buffer.as_mut_ptr() as u32;
@@ -235,6 +229,13 @@ impl PhyRadio {
             self.radio.tasks_txen.write(|w| w.bits(1));
         }
 
+        // Don't keep transmitting, but also don't quit immediately
+        self.radio.shorts.write(|w| w
+            .ready_start().bit(true)
+            .end_start().bit(false)
+            .end_disable().bit(false)
+        );
+
         Ok(())
     }
 
@@ -247,6 +248,13 @@ impl PhyRadio {
             // Writing 1 to a task register fires the task
             self.radio.tasks_rxen.write(|w| w.bits(1));
         }
+
+        // Keep receiving as long as we can
+        self.radio.shorts.write(|w| w
+            .ready_start().bit(true)
+            .end_start().bit(true)
+            .end_disable().bit(false)
+        );
 
         self.radio.rxaddresses.write(|w| w
             .addr0().bit(true) // listen on addr0 (advertising)

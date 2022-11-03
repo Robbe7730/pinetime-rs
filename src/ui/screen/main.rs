@@ -6,9 +6,9 @@ use crate::drivers::clock::Clock;
 use crate::pinetimers::ConnectedRtc;
 use crate::drivers::mcuboot::MCUBoot;
 
-use embedded_graphics::prelude::{DrawTarget, Point, Drawable, Transform};
+use embedded_graphics::prelude::{DrawTarget, Point, Drawable, Transform, Size};
 use embedded_graphics::pixelcolor::RgbColor;
-use embedded_graphics::primitives::{Circle, Line, Primitive, PrimitiveStyleBuilder};
+use embedded_graphics::primitives::{Circle, Line, Primitive, PrimitiveStyleBuilder, Rectangle};
 use embedded_graphics::text::{Text, Baseline};
 use embedded_graphics::mono_font::ascii::FONT_10X20;
 use embedded_graphics::mono_font::MonoTextStyle;
@@ -140,6 +140,15 @@ where
                 .draw(display)
                 .unwrap();
         });
+
+        Rectangle::new(Point::new(0, 0), Size::new(240, 20))
+            .into_styled(
+                PrimitiveStyleBuilder::new()
+                    .fill_color(COLOR::BLACK)
+                    .build()
+            )
+            .draw(display)
+            .unwrap();
 
         let text_style = MonoTextStyle::new(&FONT_10X20, COLOR::WHITE);
         Text::with_baseline(
