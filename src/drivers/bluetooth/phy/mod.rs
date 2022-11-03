@@ -1,10 +1,13 @@
 mod channels;
+pub mod packets;
 
 use core::fmt::Debug;
 
 use nrf52832_hal::pac::{RADIO, FICR};
 
 use rtt_target::rprintln;
+
+use crate::drivers::bluetooth::phy::packets::BluetoothPacket;
 
 pub use self::channels::Channel;
 
@@ -294,50 +297,41 @@ impl PhyRadio {
     pub fn on_radio_interrupt(&mut self) {
         self.disable_interrupts();
         if self.radio.events_ready.read().bits() != 0 {
-            // Acknowledge READY
             self.radio.events_ready.reset();
-            rprintln!("READY");
+            // rprintln!("READY");
         } else if self.radio.events_address.read().bits() != 0 {
-            // Acknowledge ADDRESS
             self.radio.events_address.reset();
-            rprintln!("ADDRESS");
+            //rprintln!("ADDRESS");
         } else if self.radio.events_payload.read().bits() != 0 {
-            // Acknowledge PAYLOAD
             self.radio.events_payload.reset();
-            rprintln!("PAYLOAD");
+            // rprintln!("PAYLOAD");
         } else if self.radio.events_end.read().bits() != 0 {
-            // Acknowledge END
             self.radio.events_end.reset();
-            rprintln!("END");
-            rprintln!("Packet: {:x?}", self.packet_buffer)
+            // rprintln!("END");
+            rprintln!("{:?}", BluetoothPacket::from_advertising_primary(
+               self.packet_buffer.as_slice()
+            ))
         } else if self.radio.events_disabled.read().bits() != 0 {
-            // Acknowledge DISABLED
             self.radio.events_disabled.reset();
-            rprintln!("DISABLED");
+            // rprintln!("DISABLED");
         } else if self.radio.events_devmatch.read().bits() != 0 {
-            // Acknowledge DEVMATCH
             self.radio.events_devmatch.reset();
-            rprintln!("DEVMATCH");
+            // rprintln!("DEVMATCH");
         } else if self.radio.events_devmiss.read().bits() != 0 {
-            // Acknowledge DEVMISS
             self.radio.events_devmiss.reset();
-            rprintln!("DEVMISS");
+            // rprintln!("DEVMISS");
         } else if self.radio.events_rssiend.read().bits() != 0 {
-            // Acknowledge RSSIEND
             self.radio.events_rssiend.reset();
-            rprintln!("RSSIEND");
+            // rprintln!("RSSIEND");
         } else if self.radio.events_bcmatch.read().bits() != 0 {
-            // Acknowledge BCMATCH
             self.radio.events_bcmatch.reset();
-            rprintln!("BCMATCH");
+            // rprintln!("BCMATCH");
         } else if self.radio.events_crcok.read().bits() != 0 {
-            // Acknowledge CRCOK
             self.radio.events_crcok.reset();
-            rprintln!("CRCOK");
+            // rprintln!("CRCOK");
         } else if self.radio.events_crcerror.read().bits() != 0 {
-            // Acknowledge CRCERROR
             self.radio.events_crcerror.reset();
-            rprintln!("CRCERROR");
+            // rprintln!("CRCERROR");
         }
         self.enable_interrupts();
     }

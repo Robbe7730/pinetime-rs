@@ -1,4 +1,5 @@
-mod phy;
+pub mod phy;
+mod link;
 
 use nrf52832_hal::pac::{RADIO, FICR};
 
@@ -16,7 +17,7 @@ impl Bluetooth {
     ) -> Self {
         let phy = PhyRadio::new(radio, ficr, packet_buffer);
 
-        phy.set_channel(Channel::new(37), None, None);
+        phy.set_channel(Channel::new(39), None, None);
         phy.rx_enable().unwrap();
 
         Bluetooth {
