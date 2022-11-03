@@ -2,10 +2,10 @@ mod phy;
 
 use nrf52832_hal::pac::{RADIO, FICR};
 
-use self::phy::PhyRadio;
+use self::phy::{PhyRadio, Channel};
 
 pub struct Bluetooth {
-    phy: PhyRadio,
+    pub phy: PhyRadio,
 }
 
 impl Bluetooth {
@@ -16,12 +16,16 @@ impl Bluetooth {
     ) -> Self {
         let phy = PhyRadio::new(radio, ficr, packet_buffer);
 
+        phy.set_channel(Channel::new(37), None, None);
+        phy.rx_enable().unwrap();
+
         Bluetooth {
             phy,
         }
     }
 
     pub fn on_radio_interrupt(&mut self) {
+        // self.phy.dump_registers();
         self.phy.on_radio_interrupt();
     }
 }

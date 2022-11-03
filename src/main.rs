@@ -119,12 +119,12 @@ mod tasks {
         crate::pinetimers::tasks_impl::periodic_update_device_state(ctx)
     }
 
-    #[task(shared = [display, current_screen, clock, mcuboot, battery])]
+    #[task(shared = [display, current_screen, clock, mcuboot, battery, bluetooth])]
     fn redraw_screen(ctx: redraw_screen::Context) {
         crate::pinetimers::tasks_impl::redraw_screen(ctx)
     }
 
-    #[task(shared = [display, current_screen, clock, mcuboot])]
+    #[task(shared = [display, current_screen, clock, mcuboot, bluetooth])]
     fn init_screen(ctx: init_screen::Context) {
         crate::pinetimers::tasks_impl::init_screen(ctx)
     }

@@ -1,4 +1,4 @@
-use rtic::mutex_prelude::TupleExt04;
+use rtic::mutex_prelude::TupleExt05;
 
 pub fn redraw_screen(ctx: crate::tasks::redraw_screen::Context) {
     (
@@ -6,7 +6,8 @@ pub fn redraw_screen(ctx: crate::tasks::redraw_screen::Context) {
         ctx.shared.current_screen,
         ctx.shared.clock,
         ctx.shared.mcuboot,
-    ).lock(|display, current_screen, clock, mcuboot| {
-        current_screen.draw_update(display, clock, mcuboot);
+        ctx.shared.bluetooth,
+    ).lock(|display, current_screen, clock, mcuboot, bluetooth| {
+        current_screen.draw_update(display, clock, mcuboot, bluetooth);
     });
 }

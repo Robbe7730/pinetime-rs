@@ -4,6 +4,7 @@ mod poes;
 pub use main::ScreenMain;
 pub use poes::ScreenPoes;
 
+use crate::drivers::bluetooth::Bluetooth;
 use crate::drivers::touchpanel::TouchPanelEventHandler;
 use crate::drivers::clock::Clock;
 use crate::drivers::mcuboot::MCUBoot;
@@ -20,6 +21,6 @@ pub trait Screen<D> : Send + Debug {
     // (with Screen : TouchPanelEventHandler) to TouchPanelEventHandler,
     // because we don't know the type (and size) of the current screen...
     fn get_event_handler(&self) -> Arc<dyn TouchPanelEventHandler>;
-    fn draw_init(&mut self, display: &mut D, clock: &Clock<ConnectedRtc>, mcuboot: &MCUBoot);
-    fn draw_update(&mut self, display: &mut D, clock: &Clock<ConnectedRtc>, mcuboot: &MCUBoot);
+    fn draw_init(&mut self, display: &mut D, clock: &Clock<ConnectedRtc>, mcuboot: &MCUBoot, bluetooth: &Bluetooth);
+    fn draw_update(&mut self, display: &mut D, clock: &Clock<ConnectedRtc>, mcuboot: &MCUBoot, bluetooth: &Bluetooth);
 }

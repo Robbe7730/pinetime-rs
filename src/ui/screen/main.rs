@@ -1,3 +1,4 @@
+use crate::drivers::bluetooth::Bluetooth;
 use crate::ui::screen::Screen;
 use crate::drivers::touchpanel::{TouchPanelEventHandler, TouchPoint};
 use crate::drivers::display::DisplaySupported;
@@ -22,7 +23,7 @@ use chrono::Timelike;
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::vec;
+use alloc::{vec, format};
 
 #[derive(Debug)]
 pub struct ScreenMain<COLOR> {
@@ -79,7 +80,7 @@ where
         return self.event_handler.clone();
     }
 
-    fn draw_init(&mut self, display: &mut DISPLAY, _clock: &Clock<ConnectedRtc>, mcuboot: &MCUBoot) {
+    fn draw_init(&mut self, display: &mut DISPLAY, _clock: &Clock<ConnectedRtc>, _: &MCUBoot, _: &Bluetooth) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
 
@@ -94,14 +95,9 @@ where
             )
             .draw(display)
             .unwrap();
-
-        let text_style = MonoTextStyle::new(&FONT_10X20, COLOR::WHITE);
-        Text::with_baseline(&mcuboot.version_string(), Point::new(0, 0), text_style, Baseline::Top)
-            .draw(display)
-            .unwrap();
     }
 
-    fn draw_update(&mut self, display: &mut DISPLAY, clock: &Clock<ConnectedRtc>, _: &MCUBoot) {
+    fn draw_update(&mut self, display: &mut DISPLAY, clock: &Clock<ConnectedRtc>, _: &MCUBoot, bluetooth: &Bluetooth) {
         let clock_center = Point::new(120, 120);
         let clock_radius = 90;
 
@@ -144,5 +140,15 @@ where
                 .draw(display)
                 .unwrap();
         });
+
+        let text_style = MonoTextStyle::new(&FONT_10X20, COLOR::WHITE);
+        Text::with_baseline(
+            &format!("{:?}", bluetooth.phy.get_state()),
+            Point::new(0, 0),
+            text_style,
+            Baseline::Top
+        )
+            .draw(display)
+            .unwrap();
     }
 }
