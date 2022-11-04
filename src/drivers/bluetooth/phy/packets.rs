@@ -2,6 +2,7 @@ use alloc::fmt::Debug;
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use alloc::vec;
 
 // https://web.archive.org/web/20200722194743/https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/
 // or https://web.archive.org/web/20210726153139/https://btprodspecificationrefs.blob.core.windows.net/assigned-numbers/Assigned%20Number%20Types/Generic%20Access%20Profile.pdf
@@ -44,6 +45,19 @@ impl AdvData {
         }
 
         ret
+    }
+
+    fn to_bytes(self) -> Vec<u8> {
+        match self {
+            Self::Flags(f) => vec![1, f],
+            Self::ShortenedLocalName(n) | Self::CompleteLocalName(n) => {
+                let mut ret = vec![u8::try_from(n.len()).unwrap()];
+                ret.append(&mut n.into_bytes());
+                ret
+            }
+            Self::TxPowerLevel(l) => vec![1, l as u8],
+            Self::Unknown(data) => data,
+        }
     }
 }
 
@@ -99,6 +113,19 @@ impl BluetoothAddress {
 
             BluetoothAddress::Public(data.try_into().unwrap())
         })
+    }
+
+    pub fn to_bytes(self) -> [u8; 6] {
+        match self {
+            Self::Public(x) | Self::Random(x) => x
+        }
+    }
+
+    pub fn is_random(&self) -> bool {
+        match self {
+            Self::Public(_) => false,
+            Self::Random(_) => true,
+        }
     }
 }
 
@@ -161,5 +188,32 @@ impl BluetoothPacket {
             x => BluetoothPacket::Unkown(x, Vec::from(pdu))
         })
 
+    }
+
+
+    pub fn to_bytes(self) -> Vec<u8> {
+        match self {
+            Self::AdvInd(addr, data) => {
+                let mut length = 6;
+                let mut ret = vec![0, 0];
+
+                if addr.is_random() {
+                    ret[0] = 0b01000000;
+                }
+
+                ret.extend_from_slice(&addr.to_bytes());
+
+                for advdata in data {
+                    let mut advdata_bytes = advdata.to_bytes();
+                    length += u8::try_from(advdata_bytes.len()).unwrap();
+                    ret.append(&mut advdata_bytes);
+                }
+
+                ret[1] = length;
+
+                return ret;
+            },
+            _ => todo!()
+        }
     }
 }

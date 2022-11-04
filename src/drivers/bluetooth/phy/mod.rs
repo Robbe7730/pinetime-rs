@@ -6,6 +6,8 @@ use core::fmt::Debug;
 use nrf52832_hal::pac::{RADIO, FICR};
 
 use rtt_target::rprintln;
+use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::drivers::bluetooth::phy::packets::BluetoothPacket;
 
@@ -44,10 +46,27 @@ impl From<u32> for PhyState {
     }
 }
 
+impl PhyState {
+    pub fn is_tx(&self) -> bool {
+        self == &PhyState::Tx ||
+        self == &PhyState::TxRU ||
+        self == &PhyState::TxIdle ||
+        self == &PhyState::TxDisable
+    }
+
+    pub fn is_rx(&self) -> bool {
+        self == &PhyState::Rx ||
+        self == &PhyState::RxRU ||
+        self == &PhyState::RxIdle ||
+        self == &PhyState::RxDisable
+    }
+}
+
 pub struct PhyRadio {
     radio: RADIO,
     _ficr: FICR,
     packet_buffer: &'static mut [u8; 258],
+    packet_queue: Vec<(Channel, BluetoothPacket)>, // (channel, packet)
 }
 
 impl PhyRadio {
@@ -60,6 +79,7 @@ impl PhyRadio {
             radio,
             _ficr: ficr,
             packet_buffer,
+            packet_queue: vec![]
         };
 
         // Set MODE to 1 Mbit/s BLE
@@ -172,10 +192,6 @@ impl PhyRadio {
         crc_iv: Option<u32>,
         access_address: Option<u32>
     ) {
-        if self.get_state() != PhyState::Disabled {
-            panic!("Trying to switch to advertising while not disabled");
-        }
-
         if crc_iv.is_none() && !channel.is_advertising() {
             panic!("No CRC IV given in data channel")
         }
@@ -222,48 +238,64 @@ impl PhyRadio {
         }
     }
 
-    pub fn tx_enable(&self) -> Result<(), InvalidStateError> {
-        if self.get_state() != PhyState::Disabled {
-            return Err(InvalidStateError {});
-        }
-
-        // Writing 1 to a task register fires the task
-        unsafe {
-            self.radio.tasks_txen.write(|w| w.bits(1));
-        }
-
-        // Don't keep transmitting, but also don't quit immediately
+    // Start transition to TxIdle state
+    // NOTE: not using Tx state as this requires more setup
+    pub fn tx_enable(&self) {
         self.radio.shorts.write(|w| w
-            .ready_start().bit(true)
+            .ready_start().bit(false)
             .end_start().bit(false)
             .end_disable().bit(false)
+            .disabled_rxen().bit(false)
+            .disabled_txen().bit(true)
         );
 
-        Ok(())
+        let curr_state = self.get_state();
+        if curr_state == PhyState::Rx ||
+            curr_state == PhyState::RxIdle ||
+            curr_state == PhyState::RxRU
+        {
+            unsafe {
+                self.radio.tasks_disable.write(|w| w
+                    .bits(1)
+                )
+            }
+        } else if curr_state == PhyState::Disabled {
+            unsafe {
+                self.radio.tasks_txen.write(|w| w
+                    .bits(1)
+                );
+            }
+        }
     }
 
-    pub fn rx_enable(&self) -> Result<(), InvalidStateError> {
-        if self.get_state() != PhyState::Disabled {
-            return Err(InvalidStateError {});
-        }
-
-        unsafe {
-            // Writing 1 to a task register fires the task
-            self.radio.tasks_rxen.write(|w| w.bits(1));
-        }
-
-        // Keep receiving as long as we can
+    // Start transition to Rx state
+    // NOTE: interrupts transmission if one is underway
+    pub fn rx_enable(&self) {
         self.radio.shorts.write(|w| w
             .ready_start().bit(true)
             .end_start().bit(true)
             .end_disable().bit(false)
+            .disabled_txen().bit(false)
+            .disabled_rxen().bit(true)
         );
 
-        self.radio.rxaddresses.write(|w| w
-            .addr0().bit(true) // listen on addr0 (advertising)
-        );
-
-        Ok(())
+        let curr_state = self.get_state();
+        if curr_state == PhyState::Tx ||
+            curr_state == PhyState::TxIdle ||
+            curr_state == PhyState::TxRU
+        {
+            unsafe {
+                self.radio.tasks_disable.write(|w| w
+                    .bits(1)
+                )
+            }
+        } else if curr_state == PhyState::Disabled {
+            unsafe {
+                self.radio.tasks_txen.write(|w| w
+                    .bits(1)
+                );
+            }
+        }
     }
 
     pub fn get_state(&self) -> PhyState {
@@ -294,44 +326,80 @@ impl PhyRadio {
         self.set_interrupts(false);
     }
 
+    pub fn queue_packet(&mut self, packet: BluetoothPacket, channel: Channel) {
+        self.packet_queue.push((channel, packet));
+        self.tx_enable();
+    }
+
+    // Sends the next packet if there is one in the queue
+    // If the queue is empty, transition to Rx
+    fn process_packet_queue(&mut self) {
+        if self.get_state() == PhyState::TxIdle {
+            if let Some((channel, packet_to_send)) = self.packet_queue.pop() {
+                // Tune the device
+                self.set_channel(channel, None, None);
+
+                // Copy the packet into the buffer
+                let packet_bytes = packet_to_send.to_bytes();
+                // rprintln!("{:?}", packet_bytes);
+                self.packet_buffer[0..packet_bytes.len()]
+                    .copy_from_slice(packet_bytes.as_slice());
+                // Start transmitting
+                unsafe {
+                    self.radio.tasks_start.write(|w| w
+                        .bits(1)
+                    );
+                }
+            } else {
+                self.rx_enable();
+            }
+        } else if self.packet_queue.is_empty() {
+            self.rx_enable();
+        }
+    }
+
     pub fn on_radio_interrupt(&mut self) {
         self.disable_interrupts();
         if self.radio.events_ready.read().bits() != 0 {
             self.radio.events_ready.reset();
-            // rprintln!("READY");
+            rprintln!("READY");
+            self.process_packet_queue();
         } else if self.radio.events_address.read().bits() != 0 {
             self.radio.events_address.reset();
-            //rprintln!("ADDRESS");
+            rprintln!("ADDRESS");
         } else if self.radio.events_payload.read().bits() != 0 {
             self.radio.events_payload.reset();
-            // rprintln!("PAYLOAD");
+            rprintln!("PAYLOAD");
         } else if self.radio.events_end.read().bits() != 0 {
             self.radio.events_end.reset();
-            // rprintln!("END");
-            rprintln!("{:?}", BluetoothPacket::from_advertising_primary(
-               self.packet_buffer.as_slice()
-            ))
+            rprintln!("END");
+            self.process_packet_queue();
+            if self.get_state().is_rx() {
+                rprintln!("{:?}", BluetoothPacket::from_advertising_primary(
+                    self.packet_buffer
+                ));
+            }
         } else if self.radio.events_disabled.read().bits() != 0 {
             self.radio.events_disabled.reset();
-            // rprintln!("DISABLED");
+            rprintln!("DISABLED");
         } else if self.radio.events_devmatch.read().bits() != 0 {
             self.radio.events_devmatch.reset();
-            // rprintln!("DEVMATCH");
+            rprintln!("DEVMATCH");
         } else if self.radio.events_devmiss.read().bits() != 0 {
             self.radio.events_devmiss.reset();
-            // rprintln!("DEVMISS");
+            rprintln!("DEVMISS");
         } else if self.radio.events_rssiend.read().bits() != 0 {
             self.radio.events_rssiend.reset();
-            // rprintln!("RSSIEND");
+            rprintln!("RSSIEND");
         } else if self.radio.events_bcmatch.read().bits() != 0 {
             self.radio.events_bcmatch.reset();
-            // rprintln!("BCMATCH");
+            rprintln!("BCMATCH");
         } else if self.radio.events_crcok.read().bits() != 0 {
             self.radio.events_crcok.reset();
-            // rprintln!("CRCOK");
+            rprintln!("CRCOK");
         } else if self.radio.events_crcerror.read().bits() != 0 {
             self.radio.events_crcerror.reset();
-            // rprintln!("CRCERROR");
+            rprintln!("CRCERROR");
         }
         self.enable_interrupts();
     }

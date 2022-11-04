@@ -46,15 +46,15 @@ pub struct Shared {
 pub struct Local {}
 
 pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::init::Monotonics) {
-        rtt_init_print!();
-        rprintln!("Pijn tijd");
-
         unsafe {
             // Set up heap
             let heap_start = 0x2000_1000;
             let heap_end = 0x2001_0000;
             crate::HEAP.lock().init(heap_start, heap_end - heap_start);
         }
+
+        rtt_init_print!(NoBlockTrim, 2048);
+        rprintln!("Pijn tijd");
 
         // Set up watchdog (enabled by MCUBoot)
         let watchdog = Watchdog::try_recover::<count::One>(ctx.device.WDT).unwrap();
