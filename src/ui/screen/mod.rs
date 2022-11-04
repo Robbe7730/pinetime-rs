@@ -1,8 +1,6 @@
 mod main;
-mod poes;
 
 pub use main::ScreenMain;
-pub use poes::ScreenPoes;
 
 use crate::drivers::bluetooth::Bluetooth;
 use crate::drivers::touchpanel::TouchPanelEventHandler;

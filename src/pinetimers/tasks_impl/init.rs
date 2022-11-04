@@ -50,7 +50,7 @@ pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::i
             // Set up heap
             let heap_start = 0x2000_1000;
             let heap_end = 0x2001_0000;
-            crate::HEAP.lock().init(heap_start, heap_end - heap_start);
+            crate::HEAP.lock().init(heap_start as *mut u8, heap_end - heap_start);
         }
 
         rtt_init_print!(NoBlockTrim, 2048);
@@ -103,7 +103,7 @@ pub fn init(ctx: crate::tasks::init::Context) -> (Shared, Local, crate::tasks::i
 
         // Set up SPI
         let spi_pins = spim::Pins {
-            sck: gpio.p0_02.into_push_pull_output(Level::Low).degrade(),
+            sck: Some(gpio.p0_02.into_push_pull_output(Level::Low).degrade()),
             mosi: Some(gpio.p0_03.into_push_pull_output(Level::Low).degrade()),
             // MISO is not connected for the LCD, but is for flash memory
             miso: Some(gpio.p0_04.into_floating_input().degrade())
